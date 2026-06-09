@@ -1,0 +1,87 @@
+[
+  {
+    "wineId": "fa5d5d80-3f0d-4b1c-8a41-8b72b9059f2a",
+    "tastedDate": "2026-06-05",
+    "wineName": "Marlborough Sauvignon Blanc Reserve",
+    "country": "New Zealand",
+    "closureType": "Screw cap",
+    "vol": 13.5,
+    "imageUrl": "https://images.unsplash.com/photo-1517673132405-28d14a6da16d?auto=format&fit=crop&w=800&q=80",
+    "comment": "Bright citrus, green bell pepper and flinty minerality with a long, zippy finish.",
+    "groupAverage": 4.2,
+    "memberRatings": {
+      "Marten": 4,
+      "Mirjam": 5,
+      "Alex": 4,
+      "Sofia": 4
+    }
+  },
+  {
+    "wineId": "c7221bfb-8c03-4291-bb56-d2d3e5a15c4f",
+    "tastedDate": "2026-06-01",
+    "wineName": "Loire Valley Sauvignon Blanc",
+    "country": "France",
+    "closureType": "Cork",
+    "vol": 12.7,
+    "imageUrl": "https://images.unsplash.com/photo-1524594154905-b0f5ffb9f4d0?auto=format&fit=crop&w=800&q=80",
+    "comment": "A lean Sauvignon Blanc with pear, wet stone and a hint of nettle on the palate.",
+    "groupAverage": 4.0,
+    "memberRatings": {
+      "Marten": 4,
+      "Mirjam": 4,
+      "Noah": 4,
+      "Emma": 4
+    }
+  },
+  {
+    "wineId": "9a4f4e85-2e2a-4fa3-a73f-0e7a76ae9d81",
+    "tastedDate": "2026-05-28",
+    "wineName": "Barossa Valley Shiraz",
+    "country": "Australia",
+    "closureType": "Screw cap",
+    "vol": 14.3,
+    "imageUrl": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=80",
+    "comment": "Dark plum, smoked spice and rounded tannins; a bold red with a generous finish.",
+    "groupAverage": 4.6,
+    "memberRatings": {
+      "Marten": 5,
+      "Mirjam": 4,
+      "Noah": 5,
+      "Emma": 4
+    }
+  },
+  {
+    "wineId": "b1c7e2d8-7f2a-453b-a370-171f6a3f4410",
+    "tastedDate": "2026-05-24",
+    "wineName": "Sauvignon Blanc Estate Selection",
+    "country": "Chile",
+    "closureType": "Screw cap",
+    "vol": 13.0,
+    "imageUrl": "https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=800&q=80",
+    "comment": "A crisp, grassy Sauvignon Blanc with lime zest, fresh herbs and a chalky mid-palate.",
+    "groupAverage": 4.1,
+    "memberRatings": {
+      "Marten": 4,
+      "Mirjam": 4,
+      "Noah": 4,
+      "Emma": 4
+    }
+  },
+  {
+    "wineId": "d4b3e5b9-5f39-4882-82cd-ae00183c7b8f",
+    "tastedDate": "2026-05-30",
+    "wineName": "Central Coast Pinot Noir",
+    "country": "United States",
+    "closureType": "Cork",
+    "vol": 13.2,
+    "imageUrl": "https://images.unsplash.com/photo-1518608730648-8d6b9f2d7a3f?auto=format&fit=crop&w=800&q=80",
+    "comment": "Soft red cherry, dried herbs and a light savory edge, with a clean, elegant finish.",
+    "groupAverage": 4.3,
+    "memberRatings": {
+      "Marten": 4,
+      "Mirjam": 4,
+      "Noah": 5,
+      "Emma": 4
+    }
+  }
+]
