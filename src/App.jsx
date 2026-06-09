@@ -8,9 +8,35 @@ import './App.css';
 function App() {
   const [wines, setWines] = useState(mockWines);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingWine, setEditingWine] = useState(null);
 
   const handleAddWine = newWine => {
     setWines(prev => [newWine, ...(prev || [])]);
+    setIsFormOpen(false);
+  };
+
+  const handleEditWine = wine => {
+    setEditingWine(wine);
+    setIsFormOpen(true);
+  };
+
+  const handleUpdateWine = updatedWine => {
+    setWines(prev => 
+      prev.map(wine => wine.wineId === updatedWine.wineId ? updatedWine : wine)
+    );
+    setEditingWine(null);
+    setIsFormOpen(false);
+  };
+
+  const handleDeleteWine = wineId => {
+    if (window.confirm('Are you sure you want to delete this wine?')) {
+      setWines(prev => prev.filter(wine => wine.wineId !== wineId));
+    }
+  };
+
+  const handleCloseForm = () => {
+    setIsFormOpen(false);
+    setEditingWine(null);
   };
 
   return (
@@ -25,7 +51,10 @@ function App() {
             </div>
             <button
               type="button"
-              onClick={() => setIsFormOpen(true)}
+              onClick={() => {
+                setEditingWine(null);
+                setIsFormOpen(true);
+              }}
               className="inline-flex items-center justify-center rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
             >
               Add Wine
@@ -35,13 +64,14 @@ function App() {
 
         <DashboardMetrics wines={wines} />
 
-        <WineTable wines={wines} />
+        <WineTable wines={wines} onEdit={handleEditWine} onDelete={handleDeleteWine} />
       </div>
 
       <AddWineForm
         isOpen={isFormOpen}
-        onClose={() => setIsFormOpen(false)}
-        onSave={handleAddWine}
+        onClose={handleCloseForm}
+        onSave={editingWine ? handleUpdateWine : handleAddWine}
+        initialWine={editingWine}
       />
     </div>
   );

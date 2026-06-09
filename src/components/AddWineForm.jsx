@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
 
@@ -7,9 +7,10 @@ const S3_BUCKET = 'wine-tracker-media';
 const DDB_TABLE = 'WineTracker';
 const MEMBERS = ['Marten', 'Mirjam', 'Alex', 'Sofia'];
 
-export default function AddWineForm({ isOpen, onClose, onSave }) {
+export default function AddWineForm({ isOpen, onClose, onSave, initialWine }) {
   const [formState, setFormState] = useState({
     tastedDate: '',
+    timestamp: '',
     wineName: '',
     country: '',
     closureType: 'Screw cap',
@@ -20,6 +21,40 @@ export default function AddWineForm({ isOpen, onClose, onSave }) {
   const [file, setFile] = useState(null);
   const [status, setStatus] = useState('');
 
+  // Pre-populate form when editing
+  useEffect(() => {
+    if (initialWine) {
+      setFormState({
+        tastedDate: initialWine.tastedDate || '',
+        timestamp: initialWine.timestamp || '',
+        wineName: initialWine.wineName || '',
+        country: initialWine.country || '',
+        closureType: initialWine.closureType || 'Screw cap',
+        vol: initialWine.vol || '',
+        comment: initialWine.comment || '',
+        memberRatings: MEMBERS.reduce((acc, name) => ({
+          ...acc,
+          [name]: initialWine.memberRatings?.[name] || '',
+        }), {}),
+      });
+      setFile(null);
+      setStatus('');
+    } else {
+      setFormState({
+        tastedDate: '',
+        timestamp: '',
+        wineName: '',
+        country: '',
+        closureType: 'Screw cap',
+        vol: '',
+        comment: '',
+        memberRatings: MEMBERS.reduce((acc, name) => ({ ...acc, [name]: '' }), {}),
+      });
+      setFile(null);
+      setStatus('');
+    }
+  }, [isOpen, initialWine]);
+
   const groupAverage = useMemo(() => {
     const ratings = MEMBERS.map(name => Number(formState.memberRatings[name] || 0));
     const validRatings = ratings.filter(value => !Number.isNaN(value));
@@ -29,7 +64,13 @@ export default function AddWineForm({ isOpen, onClose, onSave }) {
 
   const handleFieldChange = event => {
     const { name, value } = event.target;
-    setFormState(prev => ({ ...prev, [name]: value }));
+    if (name === 'tastedDate') {
+      // Auto-generate timestamp when date changes
+      const timestamp = new Date(`${value}T12:00:00Z`).toISOString();
+      setFormState(prev => ({ ...prev, [name]: value, timestamp }));
+    } else {
+      setFormState(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleRatingChange = (member, value) => {
@@ -49,31 +90,41 @@ export default function AddWineForm({ isOpen, onClose, onSave }) {
 
   const handleSubmit = async event => {
     event.preventDefault();
-    if (!file) {
+    const isEditing = !!initialWine;
+
+    if (!isEditing && !file) {
       setStatus('Please select a bottle image before submitting.');
       return;
     }
 
-    setStatus('Uploading image to S3...');
-    const wineId = crypto.randomUUID();
-    const objectKey = `uploads/${wineId}/${file.name}`;
-    const s3Client = new S3Client({ region: REGION });
+    const wineId = initialWine?.wineId || crypto.randomUUID();
+    let imageUrl = initialWine?.imageUrl;
 
     try {
-      await s3Client.send(
-        new PutObjectCommand({
-          Bucket: S3_BUCKET,
-          Key: objectKey,
-          Body: file,
-          ContentType: file.type,
-        })
-      );
+      // Upload image if a new file is provided
+      if (file) {
+        setStatus('Uploading image to S3...');
+        const objectKey = `uploads/${wineId}/${file.name}`;
+        const s3Client = new S3Client({ region: REGION });
 
-      const imageUrl = `https://${S3_BUCKET}.s3.${REGION}.amazonaws.com/${objectKey}`;
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: S3_BUCKET,
+            Key: objectKey,
+            Body: file,
+            ContentType: file.type,
+          })
+        );
+
+        imageUrl = `https://${S3_BUCKET}.s3.${REGION}.amazonaws.com/${objectKey}`;
+      }
+
+      setStatus(isEditing ? 'Updating wine record...' : 'Saving record to DynamoDB...');
       const dynamoClient = new DynamoDBClient({ region: REGION });
       const item = {
         wineId: { S: wineId },
         tastedDate: { S: formState.tastedDate },
+        timestamp: { S: formState.timestamp },
         wineName: { S: formState.wineName },
         country: { S: formState.country },
         closureType: { S: formState.closureType },
@@ -92,12 +143,12 @@ export default function AddWineForm({ isOpen, onClose, onSave }) {
         },
       };
 
-      setStatus('Saving record to DynamoDB...');
       await dynamoClient.send(new PutItemCommand({ TableName: DDB_TABLE, Item: item }));
 
       const newWine = {
         wineId,
         tastedDate: formState.tastedDate,
+        timestamp: formState.timestamp,
         wineName: formState.wineName,
         country: formState.country,
         closureType: formState.closureType,
@@ -116,9 +167,10 @@ export default function AddWineForm({ isOpen, onClose, onSave }) {
         onSave(newWine);
       }
 
-      setStatus('Wine entry saved successfully.');
+      setStatus(isEditing ? 'Wine entry updated successfully.' : 'Wine entry saved successfully.');
       setFormState({
         tastedDate: '',
+        timestamp: '',
         wineName: '',
         country: '',
         closureType: 'Screw cap',
@@ -136,14 +188,19 @@ export default function AddWineForm({ isOpen, onClose, onSave }) {
 
   if (!isOpen) return null;
 
+  const isEditing = !!initialWine;
+  const formTitle = isEditing ? 'Edit Wine' : 'Add New Wine';
+  const formDescription = isEditing ? 'Update wine details and metadata.' : 'Upload image and submit tasting metadata to DynamoDB.';
+  const submitButtonText = isEditing ? 'Update Wine' : 'Save Wine';
+
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/60">
       <div className="absolute inset-0" onClick={onClose} />
       <section className="relative right-0 ml-auto flex h-full w-full max-w-3xl flex-col overflow-y-auto bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
           <div>
-            <h2 className="text-xl font-semibold text-slate-900">Add New Wine</h2>
-            <p className="mt-1 text-sm text-slate-500">Upload image and submit tasting metadata to DynamoDB.</p>
+            <h2 className="text-xl font-semibold text-slate-900">{formTitle}</h2>
+            <p className="mt-1 text-sm text-slate-500">{formDescription}</p>
           </div>
           <button
             onClick={onClose}
@@ -226,12 +283,12 @@ export default function AddWineForm({ isOpen, onClose, onSave }) {
             </label>
 
             <label className="block">
-              <span className="text-sm font-semibold text-slate-700">Bottle Image</span>
+              <span className="text-sm font-semibold text-slate-700">{isEditing ? 'Bottle Image (Optional)' : 'Bottle Image'}</span>
               <input
                 type="file"
                 accept="image/*"
                 onChange={handleFileChange}
-                required
+                required={!isEditing}
                 className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
               />
             </label>
@@ -275,12 +332,12 @@ export default function AddWineForm({ isOpen, onClose, onSave }) {
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-            <p className="text-sm text-slate-500">This form uploads your image to S3 and writes the wine metadata into DynamoDB.</p>
+            <p className="text-sm text-slate-500">{isEditing ? 'Update wine metadata in DynamoDB.' : 'Upload your image to S3 and write the wine metadata into DynamoDB.'}</p>
             <button
               type="submit"
               className="inline-flex items-center justify-center rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
             >
-              Save Wine
+              {submitButtonText}
             </button>
           </div>
           {status && <p className="text-sm text-slate-600">{status}</p>}
