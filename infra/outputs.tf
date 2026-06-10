@@ -13,6 +13,11 @@ output "cloudfront_distribution_domain" {
   value       = aws_cloudfront_distribution.website_cdn.domain_name
 }
 
+output "cloudfront_distribution_id" {
+  description = "CloudFront distribution ID."
+  value       = aws_cloudfront_distribution.website_cdn.id
+}
+
 output "media_bucket_name" {
   description = "S3 bucket name for wine bottle media uploads."
   value       = aws_s3_bucket.media.bucket

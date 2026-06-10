@@ -25,12 +25,12 @@ resource "aws_s3_bucket_website_configuration" "website" {
 }
 
 resource "aws_cloudfront_origin_access_control" "oac" {
-  name = "wine-tracker-oac"
+  name        = "wine-tracker-oac"
   description = "Origin Access Control for WineTracker S3 website"
 
-  origin_access_control_origin_type    = "s3"
-  signing_protocol = "sigv4"
-  signing_behavior = "always"
+  origin_access_control_origin_type = "s3"
+  signing_protocol                  = "sigv4"
+  signing_behavior                  = "always"
 }
 
 resource "aws_cloudfront_distribution" "website_cdn" {

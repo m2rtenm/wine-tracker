@@ -136,8 +136,34 @@ terraform apply
 Override defaults with:
 
 ```bash
-terraform apply -var='aws_region=eu-north-1' -var='aws_profile=dev'
+terraform apply -var='aws_region=eu-north-1' -var='aws_profile=prod'
 ```
+
+## GitHub Actions deployment
+
+This repository includes a GitHub Actions workflow at `.github/workflows/deploy.yml`.
+
+Important: the Terraform remote state bucket lives in the `sec` profile/account, while the production website deployment goes through the `prod` profile/account. The workflow is split to use separate credentials for these two purposes.
+
+To use it, add these repository secrets in GitHub:
+
+- `AWS_STATE_ACCESS_KEY_ID` — AWS key for the Terraform remote state backend (`sec` account/profile)
+- `AWS_STATE_SECRET_ACCESS_KEY`
+- `AWS_DEPLOY_ACCESS_KEY_ID` — AWS key for the website deployment account/profile (`prod`)
+- `AWS_DEPLOY_SECRET_ACCESS_KEY`
+
+The workflow reads the target website bucket and CloudFront distribution ID directly from Terraform outputs in `infra/`.
+
+The workflow runs on every push to `main` and performs:
+
+1. `npm ci`
+2. `npm run build`
+3. `terraform init` in `infra/`
+4. `terraform output` to discover `website_bucket_name` and `cloudfront_distribution_id`
+5. `aws s3 sync dist/ s3://$WEBSITE_BUCKET --delete`
+6. CloudFront invalidation for `/*`
+
+You can also trigger it manually from GitHub via `workflow_dispatch`.
 
 ## Future work
 
