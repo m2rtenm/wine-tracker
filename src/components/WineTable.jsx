@@ -61,6 +61,7 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
       newSet.add(member);
     }
     setSelectedMembers(newSet);
+    setSorting([]);
   };
 
   const formatTimestamp = timestamp => {
@@ -81,29 +82,52 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
         accessorKey: 'imageUrl',
         cell: info => {
           const imageUrl = info.getValue();
-          const topRank = info.row.original._topRank;
-          const topRankText = topRank === 'top3' ? 'Top 3' : topRank === 'top5' ? 'Top 5' : null;
           return imageUrl ? (
-            <div className="relative">
-              {topRankText && (
-                <div className={`absolute -top-2 -right-2 rounded-full px-1.5 py-0.5 text-xs font-bold ${
-                  topRankText === 'Top 3' 
-                    ? 'bg-amber-400 text-amber-900' 
-                    : 'bg-amber-300 text-amber-800'
-                }`}>
-                  {topRankText}
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => openImageModal(imageUrl)}
-                className="relative h-12 w-12 overflow-hidden rounded-lg border border-slate-200 transition hover:border-indigo-500 hover:shadow-md"
-              >
-                <img src={imageUrl} alt="Wine bottle" className="h-full w-full object-cover" />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => openImageModal(imageUrl)}
+              className="h-12 w-12 overflow-hidden rounded-lg border border-slate-200 transition hover:border-indigo-500 hover:shadow-md"
+            >
+              <img src={imageUrl} alt="Wine bottle" className="h-full w-full object-cover" />
+            </button>
           ) : (
             <span className="text-slate-400">No image</span>
+          );
+        },
+      },
+      {
+        accessorKey: 'wineName',
+        header: 'Wine Name',
+        cell: info => {
+          const wineName = info.getValue();
+          const imageUrl = info.row.original.imageUrl;
+          const topRank = info.row.original._topRank;
+          const topRankText = topRank === 'top3' ? 'Top 3' : topRank === 'top5' ? 'Top 5' : null;
+          return (
+            <div>
+              {imageUrl ? (
+                <button
+                  type="button"
+                  onClick={() => openImageModal(imageUrl)}
+                  className="text-left font-medium text-indigo-600 transition hover:text-indigo-800 hover:underline"
+                >
+                  {wineName}
+                </button>
+              ) : (
+                <span className="font-medium text-slate-900">{wineName}</span>
+              )}
+              {topRankText && (
+                <div className="mt-1">
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    topRankText === 'Top 3'
+                      ? 'bg-amber-400 text-amber-900'
+                      : 'bg-amber-300 text-amber-800'
+                  }`}>
+                    {topRankText}
+                  </span>
+                </div>
+              )}
+            </div>
           );
         },
       },
