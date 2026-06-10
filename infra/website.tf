@@ -24,6 +24,15 @@ resource "aws_s3_bucket_website_configuration" "website" {
   }
 }
 
+resource "aws_cloudfront_origin_access_control" "oac" {
+  name = "wine-tracker-oac"
+  description = "Origin Access Control for WineTracker S3 website"
+
+  origin_access_control_origin_type    = "s3"
+  signing_protocol = "sigv4"
+  signing_behavior = "always"
+}
+
 resource "aws_cloudfront_distribution" "website_cdn" {
   enabled             = true
   is_ipv6_enabled     = true
@@ -32,21 +41,15 @@ resource "aws_cloudfront_distribution" "website_cdn" {
   price_class         = "PriceClass_100"
 
   origin {
-    domain_name = format("%s.s3-website.%s.amazonaws.com", aws_s3_bucket.website.bucket, var.aws_region)
-    origin_id   = "WineTrackerWebsiteOrigin"
-
-    custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = "http-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
-    }
+    domain_name              = aws_s3_bucket.website.bucket_regional_domain_name
+    origin_id                = "WineTrackerWebsiteOrigin"
+    origin_access_control_id = aws_cloudfront_origin_access_control.oac.id
   }
 
   default_cache_behavior {
-    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "WineTrackerWebsiteOrigin"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "WineTrackerWebsiteOrigin"
     viewer_protocol_policy = "redirect-to-https"
 
     forwarded_values {
@@ -71,4 +74,28 @@ resource "aws_cloudfront_distribution" "website_cdn" {
     Name        = "WineTrackerCDN"
     Environment = var.aws_profile
   }
+}
+
+resource "aws_s3_bucket_policy" "website_policy" {
+  bucket = aws_s3_bucket.website.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid    = "AllowCloudFrontOACGetObject",
+        Effect = "Allow",
+        Principal = {
+          Service = "cloudfront.amazonaws.com"
+        },
+        Action   = "s3:GetObject",
+        Resource = "${aws_s3_bucket.website.arn}/*",
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = aws_cloudfront_distribution.website_cdn.arn
+          }
+        }
+      }
+    ]
+  })
 }
