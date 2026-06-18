@@ -6,12 +6,14 @@ import mockWines from './mockWines.json';
 import './App.css';
 
 function App() {
-  const [wines, setWines] = useState(mockWines);
+  const sortWines = winesToSort => [...winesToSort].sort((a, b) => b.wineId.localeCompare(a.wineId));
+
+  const [wines, setWines] = useState(sortWines(mockWines));
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingWine, setEditingWine] = useState(null);
 
   const handleAddWine = newWine => {
-    setWines(prev => [newWine, ...(prev || [])]);
+    setWines(prev => sortWines([newWine, ...(prev || [])]));
     setIsFormOpen(false);
   };
 
@@ -21,9 +23,7 @@ function App() {
   };
 
   const handleUpdateWine = updatedWine => {
-    setWines(prev => 
-      prev.map(wine => wine.wineId === updatedWine.wineId ? updatedWine : wine)
-    );
+    setWines(prev => sortWines(prev.map(wine => wine.wineId === updatedWine.wineId ? updatedWine : wine)));
     setEditingWine(null);
     setIsFormOpen(false);
   };
@@ -72,6 +72,7 @@ function App() {
         onClose={handleCloseForm}
         onSave={editingWine ? handleUpdateWine : handleAddWine}
         initialWine={editingWine}
+        existingWines={wines}
       />
     </div>
   );

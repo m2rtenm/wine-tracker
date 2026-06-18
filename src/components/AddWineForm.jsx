@@ -7,10 +7,11 @@ const S3_BUCKET = 'wine-tracker-media';
 const DDB_TABLE = 'WineTracker';
 const MEMBERS = ['Marten', 'Mirjam', 'Alex', 'Sofia'];
 
-export default function AddWineForm({ isOpen, onClose, onSave, initialWine }) {
+export default function AddWineForm({ isOpen, onClose, onSave, initialWine, existingWines = [] }) {
+  const getTodayDate = () => new Date().toISOString().split('T')[0];
+
   const [formState, setFormState] = useState({
-    tastedDate: '',
-    timestamp: '',
+    tastedDate: getTodayDate(),
     wineName: '',
     country: '',
     closureType: 'Screw cap',
@@ -26,7 +27,6 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine }) {
     if (initialWine) {
       setFormState({
         tastedDate: initialWine.tastedDate || '',
-        timestamp: initialWine.timestamp || '',
         wineName: initialWine.wineName || '',
         country: initialWine.country || '',
         closureType: initialWine.closureType || 'Screw cap',
@@ -41,8 +41,7 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine }) {
       setStatus('');
     } else {
       setFormState({
-        tastedDate: '',
-        timestamp: '',
+        tastedDate: getTodayDate(),
         wineName: '',
         country: '',
         closureType: 'Screw cap',
@@ -64,13 +63,7 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine }) {
 
   const handleFieldChange = event => {
     const { name, value } = event.target;
-    if (name === 'tastedDate') {
-      // Auto-generate timestamp when date changes
-      const timestamp = new Date(`${value}T12:00:00Z`).toISOString();
-      setFormState(prev => ({ ...prev, [name]: value, timestamp }));
-    } else {
-      setFormState(prev => ({ ...prev, [name]: value }));
-    }
+    setFormState(prev => ({ ...prev, [name]: value }));
   };
 
   const handleRatingChange = (member, value) => {
@@ -88,6 +81,18 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine }) {
     setFile(selectedFile);
   };
 
+  const generateWineId = date => {
+    const normalizedDate = date.replace(/-/g, '');
+    const existingForDate = existingWines.filter(wine => wine.tastedDate === date);
+    const maxSequence = existingForDate.reduce((max, wine) => {
+      const match = wine.wineId?.match(new RegExp(`^${normalizedDate}-(\\d+)$`));
+      const sequence = match ? Number(match[1]) : 0;
+      return Number.isNaN(sequence) ? max : Math.max(max, sequence);
+    }, 0);
+
+    return `${normalizedDate}-${maxSequence + 1}`;
+  };
+
   const handleSubmit = async event => {
     event.preventDefault();
     const isEditing = !!initialWine;
@@ -97,7 +102,7 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine }) {
       return;
     }
 
-    const wineId = initialWine?.wineId || crypto.randomUUID();
+    const wineId = initialWine?.wineId || generateWineId(formState.tastedDate);
     let imageUrl = initialWine?.imageUrl;
 
     try {
@@ -124,7 +129,6 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine }) {
       const item = {
         wineId: { S: wineId },
         tastedDate: { S: formState.tastedDate },
-        timestamp: { S: formState.timestamp },
         wineName: { S: formState.wineName },
         country: { S: formState.country },
         closureType: { S: formState.closureType },
@@ -148,7 +152,6 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine }) {
       const newWine = {
         wineId,
         tastedDate: formState.tastedDate,
-        timestamp: formState.timestamp,
         wineName: formState.wineName,
         country: formState.country,
         closureType: formState.closureType,
@@ -170,7 +173,6 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine }) {
       setStatus(isEditing ? 'Wine entry updated successfully.' : 'Wine entry saved successfully.');
       setFormState({
         tastedDate: '',
-        timestamp: '',
         wineName: '',
         country: '',
         closureType: 'Screw cap',

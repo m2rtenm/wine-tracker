@@ -64,16 +64,6 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
     setSorting([]);
   };
 
-  const formatTimestamp = timestamp => {
-    const date = new Date(timestamp);
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
   const columns = useMemo(
     () => [
       {
@@ -93,6 +83,14 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
           ) : (
             <span className="text-slate-400">No image</span>
           );
+        },
+      },
+      {
+        accessorKey: 'tastedDate',
+        header: 'Tasted',
+        cell: info => {
+          const value = info.getValue();
+          return value ? new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '-';
         },
       },
       {
@@ -128,30 +126,6 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
                 </div>
               )}
             </div>
-          );
-        },
-      },
-      {
-        accessorKey: 'timestamp',
-        header: 'Tasted',
-        cell: info => formatTimestamp(info.getValue()),
-      },
-      {
-        accessorKey: 'wineName',
-        header: 'Wine Name',
-        cell: info => {
-          const wineName = info.getValue();
-          const imageUrl = info.row.original.imageUrl;
-          return imageUrl ? (
-            <button
-              type="button"
-              onClick={() => openImageModal(imageUrl)}
-              className="text-left font-medium text-indigo-600 transition hover:text-indigo-800 hover:underline"
-            >
-              {wineName}
-            </button>
-          ) : (
-            wineName
           );
         },
       },
