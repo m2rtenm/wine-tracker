@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
+import { COUNTRIES } from '../data/countries';
 
 const REGION = 'eu-north-1';
 const S3_BUCKET = 'wine-tracker-media';
@@ -97,13 +98,8 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
     event.preventDefault();
     const isEditing = !!initialWine;
 
-    if (!isEditing && !file) {
-      setStatus('Please select a bottle image before submitting.');
-      return;
-    }
-
     const wineId = initialWine?.wineId || generateWineId(formState.tastedDate);
-    let imageUrl = initialWine?.imageUrl;
+    let imageUrl = initialWine?.imageUrl ?? '';
 
     try {
       // Upload image if a new file is provided
@@ -243,15 +239,17 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
               <span className="text-sm font-semibold text-slate-700">Country</span>
-              <input
-                type="text"
+              <select
                 name="country"
                 value={formState.country}
                 onChange={handleFieldChange}
-                placeholder="e.g. New Zealand"
-                required
                 className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
-              />
+              >
+                <option value="">— Select country —</option>
+                {COUNTRIES.map(c => (
+                  <option key={c.code} value={c.name}>{c.flag} {c.name}</option>
+                ))}
+              </select>
             </label>
 
             <label className="block">
@@ -279,18 +277,16 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
                 value={formState.vol}
                 onChange={handleFieldChange}
                 placeholder="e.g. 13.5"
-                required
                 className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
               />
             </label>
 
             <label className="block">
-              <span className="text-sm font-semibold text-slate-700">{isEditing ? 'Bottle Image (Optional)' : 'Bottle Image'}</span>
+              <span className="text-sm font-semibold text-slate-700">Bottle Image (Optional)</span>
               <input
                 type="file"
                 accept="image/*"
                 onChange={handleFileChange}
-                required={!isEditing}
                 className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
               />
             </label>
@@ -304,7 +300,6 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
               onChange={handleFieldChange}
               rows="4"
               placeholder="Describe the aroma, texture, and finish."
-              required
               className="mt-2 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
             />
           </label>
@@ -323,7 +318,6 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
                     value={formState.memberRatings[member]}
                     onChange={event => handleRatingChange(member, event.target.value)}
                     className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500"
-                    required
                   />
                 </label>
               ))}
@@ -333,13 +327,22 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-            <p className="text-sm text-slate-500">{isEditing ? 'Update wine metadata in DynamoDB.' : 'Upload your image to S3 and write the wine metadata into DynamoDB.'}</p>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-slate-500">{isEditing ? 'Update wine metadata in DynamoDB.' : 'Upload your image to S3 and write the wine metadata into DynamoDB.'}</p>
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
+              >
+                {submitButtonText}
+              </button>
+            </div>
             <button
-              type="submit"
-              className="inline-flex items-center justify-center rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
+              type="button"
+              onClick={onClose}
+              className="inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
             >
-              {submitButtonText}
+              Cancel
             </button>
           </div>
           {status && <p className="text-sm text-slate-600">{status}</p>}

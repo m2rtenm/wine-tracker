@@ -5,6 +5,9 @@ import {
   getSortedRowModel,
   flexRender,
 } from '@tanstack/react-table';
+import { getCountryFlag } from '../data/countries';
+
+const PAGE_SIZE = 30;
 
 const BACKGROUND_COLORS = [
   'bg-blue-50',
@@ -17,12 +20,20 @@ const BACKGROUND_COLORS = [
   'bg-cyan-50',
 ];
 
+const formatDate = iso => {
+  if (!iso) return '-';
+  const [year, month, day] = iso.split('-');
+  return `${day}.${month}.${year}`;
+};
+
 export default function WineTable({ wines = [], onEdit, onDelete }) {
   const [search, setSearch] = useState('');
   const [sorting, setSorting] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState(new Set());
+  const [detailWine, setDetailWine] = useState(null);
+  const [page, setPage] = useState(0);
 
   const memberKeys = useMemo(() => {
     const keys = new Set();
@@ -62,6 +73,7 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
     }
     setSelectedMembers(newSet);
     setSorting([]);
+    setPage(0);
   };
 
   const columns = useMemo(
@@ -81,17 +93,14 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
               <img src={imageUrl} alt="Wine bottle" className="h-full w-full object-cover" />
             </button>
           ) : (
-            <span className="text-slate-400">No image</span>
+            <span className="text-slate-400">-</span>
           );
         },
       },
       {
         accessorKey: 'tastedDate',
         header: 'Tasted',
-        cell: info => {
-          const value = info.getValue();
-          return value ? new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '-';
-        },
+        cell: info => formatDate(info.getValue()),
       },
       {
         accessorKey: 'wineName',
@@ -130,23 +139,6 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
         },
       },
       {
-        accessorKey: 'country',
-        header: 'Country',
-      },
-      {
-        accessorKey: 'closureType',
-        header: 'Closure',
-      },
-      {
-        id: 'abv',
-        accessorFn: row => row.abv ?? row.vol ?? null,
-        header: 'ABV',
-        cell: info => {
-          const value = info.getValue();
-          return value !== null && value !== undefined ? `${value}%` : '-';
-        },
-      },
-      {
         accessorKey: 'groupAverage',
         header: 'Group Avg',
         cell: info => {
@@ -154,27 +146,34 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
           return value !== null && value !== undefined ? value : '-';
         },
       },
-      ...memberKeys.map(member => ({
-        id: `memberRatings.${member}`,
-        accessorFn: row => row.memberRatings?.[member] ?? null,
-        header: member,
+      {
+        accessorKey: 'country',
+        header: 'Country',
         cell: info => {
-          const value = info.getValue();
-          return value !== null && value !== undefined ? value : '-';
+          const country = info.getValue();
+          if (!country) return <span className="text-slate-400">-</span>;
+          const flag = getCountryFlag(country);
+          return <span>{flag ? `${flag} ` : ''}{country}</span>;
         },
-      })),
+      },
       {
         id: 'actions',
         header: 'Actions',
         cell: info => {
           const wine = info.row.original;
           return (
-            <div className="flex gap-2">
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => setDetailWine(wine)}
+                className="inline-flex items-center rounded-lg bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-700 transition hover:bg-indigo-200"
+              >
+                Details
+              </button>
               <button
                 type="button"
                 onClick={() => onEdit(wine)}
                 className="inline-flex items-center rounded-lg bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700 transition hover:bg-amber-200"
-                title="Edit"
               >
                 Edit
               </button>
@@ -182,7 +181,6 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
                 type="button"
                 onClick={() => onDelete(wine.wineId)}
                 className="inline-flex items-center rounded-lg bg-red-100 px-2 py-1 text-xs font-medium text-red-700 transition hover:bg-red-200"
-                title="Delete"
               >
                 Delete
               </button>
@@ -191,7 +189,7 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
         },
       },
     ],
-    [memberKeys, onEdit, onDelete]
+    [onEdit, onDelete]
   );
 
   const filteredData = useMemo(() => {
@@ -246,8 +244,15 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
     return result;
   }, [search, wines, memberKeys, selectedMembers]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / PAGE_SIZE));
+
+  const pagedData = useMemo(() => {
+    const start = page * PAGE_SIZE;
+    return filteredData.slice(start, start + PAGE_SIZE);
+  }, [filteredData, page]);
+
   const table = useReactTable({
-    data: filteredData,
+    data: pagedData,
     columns,
     state: {
       sorting,
@@ -270,7 +275,7 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
             <input
               type="search"
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => { setSearch(e.target.value); setPage(0); }}
               placeholder="Search all columns..."
               className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-500 focus:bg-white sm:px-4 sm:py-3 md:w-80"
             />
@@ -297,7 +302,7 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
               {selectedMembers.size > 0 && (
                 <button
                   type="button"
-                  onClick={() => setSelectedMembers(new Set())}
+                  onClick={() => { setSelectedMembers(new Set()); setPage(0); }}
                   className="rounded-full px-3 py-1 text-xs font-medium text-slate-600 hover:text-slate-900"
                 >
                   Clear
@@ -348,21 +353,54 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
             ))}
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {table.getRowModel().rows.map(row => {
-              const bgColor = row.original._topRank ? 'bg-amber-100' : dateToBackgroundMap[row.original.tastedDate];
-              return (
-                <tr key={row.id} className={`${bgColor} hover:opacity-80`}>
-                  {row.getVisibleCells().map(cell => (
-                    <td key={cell.id} className="whitespace-nowrap px-2 py-2 align-top text-slate-700 sm:px-4 sm:py-3">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
+            {table.getRowModel().rows.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length} className="px-4 py-12 text-center text-sm text-slate-400">
+                  No wines found.
+                </td>
+              </tr>
+            ) : (
+              table.getRowModel().rows.map(row => {
+                const bgColor = row.original._topRank ? 'bg-amber-100' : dateToBackgroundMap[row.original.tastedDate];
+                return (
+                  <tr key={row.id} className={`${bgColor} hover:opacity-80`}>
+                    {row.getVisibleCells().map(cell => (
+                      <td key={cell.id} className="whitespace-nowrap px-2 py-2 align-middle text-slate-700 sm:px-4 sm:py-3">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0}
+            className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:opacity-40"
+          >
+            &larr; Previous
+          </button>
+          <span className="text-sm text-slate-600">
+            Page {page + 1} of {totalPages} &mdash; {filteredData.length} wines
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200 disabled:opacity-40"
+          >
+            Next &rarr;
+          </button>
+        </div>
+      )}
 
       {/* Image Modal */}
       {isModalOpen && selectedImage && (
@@ -378,6 +416,78 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
             </button>
             <div className="flex flex-1 items-center justify-center overflow-auto p-4">
               <img src={selectedImage} alt="Wine bottle" className="max-h-full max-w-full object-contain" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Details Modal */}
+      {detailWine && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 p-4">
+          <div className="relative w-full max-w-lg overflow-y-auto max-h-[90vh] rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <h3 className="text-lg font-semibold text-slate-900">{detailWine.wineName}</h3>
+              <button
+                type="button"
+                onClick={() => setDetailWine(null)}
+                className="rounded-full bg-slate-100 p-2 text-slate-700 transition hover:bg-slate-200"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {detailWine.imageUrl && (
+                <img src={detailWine.imageUrl} alt="Wine bottle" className="mx-auto h-48 w-auto object-contain rounded-2xl border border-slate-100" />
+              )}
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                <dt className="font-medium text-slate-500">Tasted</dt>
+                <dd className="text-slate-900">{formatDate(detailWine.tastedDate)}</dd>
+                <dt className="font-medium text-slate-500">Country</dt>
+                <dd className="text-slate-900">{getCountryFlag(detailWine.country)} {detailWine.country || '-'}</dd>
+                <dt className="font-medium text-slate-500">Closure</dt>
+                <dd className="text-slate-900">{detailWine.closureType || '-'}</dd>
+                <dt className="font-medium text-slate-500">ABV</dt>
+                <dd className="text-slate-900">{(detailWine.vol || detailWine.abv) ? `${detailWine.vol ?? detailWine.abv}%` : '-'}</dd>
+                <dt className="font-medium text-slate-500">Group Avg</dt>
+                <dd className="font-semibold text-slate-900">{detailWine.groupAverage ?? '-'}</dd>
+              </dl>
+              {detailWine.comment && (
+                <div>
+                  <p className="mb-1 text-sm font-medium text-slate-500">Tasting Notes</p>
+                  <p className="text-sm leading-relaxed text-slate-900">{detailWine.comment}</p>
+                </div>
+              )}
+              {detailWine.memberRatings && Object.keys(detailWine.memberRatings).length > 0 && (
+                <div>
+                  <p className="mb-2 text-sm font-medium text-slate-500">Member Ratings</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {Object.entries(detailWine.memberRatings).map(([member, rating]) => (
+                      <div key={member} className="flex justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">
+                        <span className="text-slate-700">{member}</span>
+                        <span className="font-semibold text-slate-900">{rating}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setDetailWine(null); onEdit(detailWine); }}
+                  className="rounded-xl bg-amber-100 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-200"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDetailWine(null)}
+                  className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -16,11 +16,19 @@
 - Improve validation for `vol` / ABV values and member ratings.
 - Add inline form validation messages and disable submit during save.
 - Keep editing flows consistent and preserve UX when closing the form.
+- Only Wine Name and Tasted Date are mandatory; all other fields are optional.
+- Country field should use a dropdown (with emoji flags) instead of a free-text input.
+- Add a Cancel button below Save Wine with the same effect as Close.
 
 ## Table UX
 - Make the table comfortable to read on desktop and mobile, ensuring all member columns and action buttons are visible.
 - Add a better responsive layout for the wine table and wrapped content if needed.
 - Add an empty state for no wines and no search/filter results.
+- Move Group Avg column to appear next to Wine Name column.
+- Show the country's emoji flag next to the country name in the table.
+- Display all dates in dd.mm.yyyy format throughout the app.
+- Add a Details button per row that opens a panel/modal with all secondary info (country, closure, ABV, comment, member ratings); the main table shows only image, date, wine name, and group avg.
+- Add pagination to the wine table (30 wines per page) so all wines are not loaded and rendered at once.
 
 ## Member filtering and highlights
 - When filtering by group member, sort by default by top wines for that member.
