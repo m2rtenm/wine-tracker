@@ -20,15 +20,30 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
+
+      - name: Validate required role configuration
+        env:
+          AWS_STATE_ROLE_ARN: ${{ secrets.AWS_STATE_ROLE_ARN }}
+          AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          if [ -z "$AWS_STATE_ROLE_ARN" ]; then
+            echo "Missing secret: AWS_STATE_ROLE_ARN"
+            exit 1
+          fi
+
+          if [ -z "$AWS_DEPLOY_ROLE_ARN" ]; then
+            echo "Missing secret: AWS_DEPLOY_ROLE_ARN"
+            exit 1
+          fi
 
       - name: Install dependencies
         run: npm ci
 
       - name: Configure AWS credentials for Terraform backend
-        uses: aws-actions/configure-aws-credentials@v4.3.1
+        uses: aws-actions/configure-aws-credentials@v5.1.0
         with:
-          role-to-assume: ${{ vars.AWS_STATE_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_STATE_ROLE_ARN }}
           role-session-name: gha-terraform-backend
           aws-region: eu-north-1
 
@@ -55,9 +70,9 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials for deployment
-        uses: aws-actions/configure-aws-credentials@v4.3.1
+        uses: aws-actions/configure-aws-credentials@v5.1.0
         with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           role-session-name: gha-deploy
           aws-region: eu-north-1
 
