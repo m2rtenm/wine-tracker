@@ -7,7 +7,12 @@
     "dev": "node --no-deprecation ./node_modules/.bin/vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "import:data": "node scripts/import-wines-from-xlsx.mjs",
+    "reset:data": "node scripts/reset-wines-table.mjs",
+    "extract:images": "/Users/martenmandla/git/wine-tracker/.venv/bin/python scripts/extract-xlsx-images.py",
+    "export:data": "node scripts/export-wines-from-dynamodb.mjs",
+    "deploy:snapshot": "bash scripts/deploy-snapshot.sh"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.0.0",
@@ -15,7 +20,8 @@
     "@aws-sdk/lib-dynamodb": "^3.0.0",
     "@tanstack/react-table": "^8.10.0",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react-dom": "^19.2.6",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

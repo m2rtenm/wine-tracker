@@ -22,3 +22,13 @@ output "media_bucket_name" {
   description = "S3 bucket name for wine bottle media uploads."
   value       = aws_s3_bucket.media.bucket
 }
+
+output "wines_api_endpoint" {
+  description = "HTTP API endpoint for wines CRUD."
+  value       = aws_apigatewayv2_api.wines_api.api_endpoint
+}
+
+output "wines_api_id" {
+  description = "HTTP API ID for wines CRUD."
+  value       = aws_apigatewayv2_api.wines_api.id
+}

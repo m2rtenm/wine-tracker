@@ -26,6 +26,12 @@ const formatDate = iso => {
   return `${day}.${month}.${year}`;
 };
 
+const formatGroupAverage = value => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '-';
+  return numeric.toFixed(2);
+};
+
 export default function WineTable({ wines = [], onEdit, onDelete }) {
   const [search, setSearch] = useState('');
   const [sorting, setSorting] = useState([]);
@@ -141,10 +147,7 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
       {
         accessorKey: 'groupAverage',
         header: 'Group Avg',
-        cell: info => {
-          const value = info.getValue();
-          return value !== null && value !== undefined ? value : '-';
-        },
+        cell: info => formatGroupAverage(info.getValue()),
       },
       {
         accessorKey: 'country',
@@ -454,7 +457,7 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
                 <dt className="font-medium text-slate-500">ABV</dt>
                 <dd className="text-slate-900">{(detailWine.vol || detailWine.abv) ? `${detailWine.vol ?? detailWine.abv}%` : '-'}</dd>
                 <dt className="font-medium text-slate-500">Group Avg</dt>
-                <dd className="font-semibold text-slate-900">{detailWine.groupAverage ?? '-'}</dd>
+                <dd className="font-semibold text-slate-900">{formatGroupAverage(detailWine.groupAverage)}</dd>
               </dl>
               {detailWine.comment && (
                 <div>
