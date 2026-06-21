@@ -9,6 +9,9 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
       - name: Checkout repository
@@ -25,8 +28,8 @@ jobs:
       - name: Configure AWS credentials for Terraform backend
         uses: aws-actions/configure-aws-credentials@v4.3.1
         with:
-          aws-access-key-id: ${{ secrets.AWS_STATE_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_STATE_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ vars.AWS_STATE_ROLE_ARN }}
+          role-session-name: gha-terraform-backend
           aws-region: eu-north-1
 
       - name: Terraform init
@@ -54,8 +57,8 @@ jobs:
       - name: Configure AWS credentials for deployment
         uses: aws-actions/configure-aws-credentials@v4.3.1
         with:
-          aws-access-key-id: ${{ secrets.AWS_DEPLOY_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_DEPLOY_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: gha-deploy
           aws-region: eu-north-1
 
       - name: Export DynamoDB snapshot
