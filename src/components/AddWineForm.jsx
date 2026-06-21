@@ -15,6 +15,7 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
     tastedDate: getTodayDate(),
     wineName: '',
     country: '',
+    berry: '',
     closureType: 'Screw cap',
     vol: '',
     comment: '',
@@ -30,6 +31,7 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
         tastedDate: initialWine.tastedDate || '',
         wineName: initialWine.wineName || '',
         country: initialWine.country || '',
+        berry: initialWine.berry || '',
         closureType: initialWine.closureType || 'Screw cap',
         vol: initialWine.vol || '',
         comment: initialWine.comment || '',
@@ -45,6 +47,7 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
         tastedDate: getTodayDate(),
         wineName: '',
         country: '',
+        berry: '',
         closureType: 'Screw cap',
         vol: '',
         comment: '',
@@ -127,6 +130,7 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
         tastedDate: { S: formState.tastedDate },
         wineName: { S: formState.wineName },
         country: { S: formState.country },
+        berry: { S: formState.berry },
         closureType: { S: formState.closureType },
         vol: { N: String(Number(formState.vol) || 0) },
         imageUrl: { S: imageUrl },
@@ -150,6 +154,7 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
         tastedDate: formState.tastedDate,
         wineName: formState.wineName,
         country: formState.country,
+        berry: formState.berry,
         closureType: formState.closureType,
         vol: Number(formState.vol) || 0,
         imageUrl,
@@ -171,6 +176,7 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
         tastedDate: '',
         wineName: '',
         country: '',
+        berry: '',
         closureType: 'Screw cap',
         vol: '',
         comment: '',
@@ -250,6 +256,18 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
                   <option key={c.code} value={c.name}>{c.flag} {c.name}</option>
                 ))}
               </select>
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">Berry / Grape</span>
+              <input
+                type="text"
+                name="berry"
+                value={formState.berry}
+                onChange={handleFieldChange}
+                placeholder="e.g. Chardonnay, Sauvignon Blanc"
+                className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+              />
             </label>
 
             <label className="block">

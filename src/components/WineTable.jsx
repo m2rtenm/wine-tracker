@@ -203,6 +203,7 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
           wine.tastedDate,
           wine.wineName,
           wine.country,
+          wine.berry,
           wine.closureType,
           String(wine.abv ?? wine.vol ?? ''),
           String(wine.groupAverage ?? ''),
@@ -446,6 +447,8 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
                 <dd className="text-slate-900">{formatDate(detailWine.tastedDate)}</dd>
                 <dt className="font-medium text-slate-500">Country</dt>
                 <dd className="text-slate-900">{getCountryFlag(detailWine.country)} {detailWine.country || '-'}</dd>
+                <dt className="font-medium text-slate-500">Berry / Grape</dt>
+                <dd className="text-slate-900">{detailWine.berry || '-'}</dd>
                 <dt className="font-medium text-slate-500">Closure</dt>
                 <dd className="text-slate-900">{detailWine.closureType || '-'}</dd>
                 <dt className="font-medium text-slate-500">ABV</dt>
