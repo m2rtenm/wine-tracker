@@ -38,9 +38,17 @@ resource "aws_iam_role_policy" "wines_api_lambda_policy" {
       {
         Effect = "Allow"
         Action = [
-          "s3:PutObject"
+          "s3:PutObject",
+          "s3:DeleteObject"
         ]
         Resource = "${aws_s3_bucket.media.arn}/uploads/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.media.arn
       },
       {
         Effect = "Allow"

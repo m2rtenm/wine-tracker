@@ -107,6 +107,34 @@ def normalize_item(payload, wine_id):
     }
 
 
+def delete_images_for_wine(wine_id):
+    prefix = f"uploads/{wine_id}/"
+    continuation_token = None
+    deleted_count = 0
+
+    while True:
+        list_kwargs = {
+            "Bucket": MEDIA_BUCKET,
+            "Prefix": prefix,
+            "MaxKeys": 1000,
+        }
+        if continuation_token:
+            list_kwargs["ContinuationToken"] = continuation_token
+
+        listed = S3.list_objects_v2(**list_kwargs)
+        contents = listed.get("Contents", [])
+        if contents:
+            objects = [{"Key": obj["Key"]} for obj in contents]
+            S3.delete_objects(Bucket=MEDIA_BUCKET, Delete={"Objects": objects})
+            deleted_count += len(objects)
+
+        if not listed.get("IsTruncated"):
+            break
+        continuation_token = listed.get("NextContinuationToken")
+
+    return deleted_count
+
+
 def handler(event, _context):
     method = event.get("requestContext", {}).get("http", {}).get("method", "")
     raw_path = event.get("rawPath", "")
@@ -142,7 +170,20 @@ def handler(event, _context):
         if not wine_id:
             return response(400, {"message": "wineId path parameter is required"})
 
+        try:
+            deleted_media_objects = delete_images_for_wine(wine_id)
+        except Exception as exc:
+            return response(500, {
+                "message": "Failed to delete wine images from media bucket",
+                "wineId": wine_id,
+                "error": str(exc),
+            })
+
         TABLE.delete_item(Key={"wineId": wine_id})
-        return response(200, {"deleted": True, "wineId": wine_id})
+        return response(200, {
+            "deleted": True,
+            "wineId": wine_id,
+            "deletedMediaObjects": deleted_media_objects,
+        })
 
     return response(404, {"message": f"No route for {method} {raw_path}"})
