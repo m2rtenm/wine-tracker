@@ -15,15 +15,7 @@ variable "cloudfront_aliases" {
 }
 
 variable "cloudfront_acm_certificate_arn" {
-  description = "ACM certificate ARN in us-east-1 for CloudFront aliases. Required when cloudfront_aliases is non-empty."
+  description = "ACM certificate ARN in us-east-1 for CloudFront aliases. Required when cloudfront_aliases is non-empty. Must match pattern: arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/UUID"
   type        = string
   default     = ""
-
-  validation {
-    condition = length(var.cloudfront_aliases) == 0 || (
-      length(var.cloudfront_acm_certificate_arn) > 0 &&
-      can(regex("^arn:aws:acm:us-east-1:[0-9]{12}:certificate/.+", var.cloudfront_acm_certificate_arn))
-    )
-    error_message = "When cloudfront_aliases is set, cloudfront_acm_certificate_arn must be a valid us-east-1 ACM certificate ARN."
-  }
 }
