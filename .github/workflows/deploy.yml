@@ -37,6 +37,36 @@ jobs:
             exit 1
           fi
 
+      - name: Validate role ARN formats and target accounts
+        env:
+          AWS_STATE_ROLE_ARN: ${{ secrets.AWS_STATE_ROLE_ARN }}
+          AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          STATE_ACCOUNT_ID=$(echo "$AWS_STATE_ROLE_ARN" | sed -E 's#^arn:aws:iam::([0-9]{12}):role/.+#\1#')
+          DEPLOY_ACCOUNT_ID=$(echo "$AWS_DEPLOY_ROLE_ARN" | sed -E 's#^arn:aws:iam::([0-9]{12}):role/.+#\1#')
+
+          if [ "$STATE_ACCOUNT_ID" = "$AWS_STATE_ROLE_ARN" ] || [ -z "$STATE_ACCOUNT_ID" ]; then
+            echo "AWS_STATE_ROLE_ARN is not a valid IAM role ARN"
+            exit 1
+          fi
+
+          if [ "$DEPLOY_ACCOUNT_ID" = "$AWS_DEPLOY_ROLE_ARN" ] || [ -z "$DEPLOY_ACCOUNT_ID" ]; then
+            echo "AWS_DEPLOY_ROLE_ARN is not a valid IAM role ARN"
+            exit 1
+          fi
+
+          if [ "$STATE_ACCOUNT_ID" != "311141538914" ]; then
+            echo "AWS_STATE_ROLE_ARN must target sec account 311141538914, got ${STATE_ACCOUNT_ID}"
+            exit 1
+          fi
+
+          if [ "$DEPLOY_ACCOUNT_ID" != "565393049153" ]; then
+            echo "AWS_DEPLOY_ROLE_ARN must target prod account 565393049153, got ${DEPLOY_ACCOUNT_ID}"
+            exit 1
+          fi
+
+          echo "Role ARNs validated for sec/prod accounts."
+
       - name: Install dependencies
         run: npm ci
 
@@ -46,6 +76,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_STATE_ROLE_ARN }}
           role-session-name: gha-terraform-backend
           aws-region: eu-north-1
+          audience: sts.amazonaws.com
 
       - name: Terraform init
         uses: hashicorp/setup-terraform@v2
@@ -75,6 +106,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           role-session-name: gha-deploy
           aws-region: eu-north-1
+          audience: sts.amazonaws.com
 
       - name: Export DynamoDB snapshot
         run: npm run export:data
