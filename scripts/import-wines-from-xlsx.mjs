@@ -1,7 +1,7 @@
 import process from 'node:process';
 import fs from 'node:fs';
 import path from 'node:path';
-import xlsx from 'xlsx';
+import ExcelJS from 'exceljs';
 import {
   DynamoDBClient,
   ScanCommand,
@@ -35,15 +35,32 @@ const MEMBER_NAMES = (process.env.MEMBERS || 'Marten,Mirjam,Alex,Sofia')
 
 const MISSING_MARKERS = new Set(['', '-', '–', '?', 'x', 'X']);
 
+const excelSerialToDate = serial => {
+  if (!Number.isFinite(serial)) return null;
+
+  // Excel serial date epoch starts at 1899-12-30 for modern files.
+  const utcDays = Math.floor(serial - 25569);
+  const utcValue = utcDays * 86400;
+  const dateInfo = new Date(utcValue * 1000);
+
+  if (Number.isNaN(dateInfo.getTime())) return null;
+
+  const fractionalDay = serial - Math.floor(serial);
+  const totalSeconds = Math.round(86400 * fractionalDay);
+
+  dateInfo.setUTCHours(0, 0, 0, 0);
+  dateInfo.setUTCSeconds(totalSeconds);
+
+  return dateInfo;
+};
+
 const toIsoDate = raw => {
   if (!raw) return '';
 
   if (typeof raw === 'number') {
-    const parsed = xlsx.SSF.parse_date_code(raw);
-    if (!parsed) return '';
-    const month = String(parsed.m).padStart(2, '0');
-    const day = String(parsed.d).padStart(2, '0');
-    return `${parsed.y}-${month}-${day}`;
+    const parsedDate = excelSerialToDate(raw);
+    if (!parsedDate) return '';
+    return parsedDate.toISOString().slice(0, 10);
   }
 
   if (raw instanceof Date) {
@@ -118,6 +135,51 @@ const loadImageMap = () => {
 const ddb = SKIP_AWS ? null : DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }));
 const s3Client = SKIP_AWS ? null : new S3Client({ region: REGION });
 
+const normalizeCellValue = value => {
+  if (value === null || value === undefined) return '';
+  if (value instanceof Date) return value;
+  if (typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean') return value;
+
+  if (value && typeof value === 'object') {
+    if (value.result !== undefined && value.result !== null) return normalizeCellValue(value.result);
+    if (Array.isArray(value.richText)) return value.richText.map(part => part.text || '').join('');
+    if (value.text !== undefined && value.text !== null) return String(value.text);
+    if (value.hyperlink !== undefined && value.hyperlink !== null) return String(value.text || value.hyperlink);
+  }
+
+  return String(value);
+};
+
+const worksheetRowsToObjects = (worksheet, headerRowIndex) => {
+  const headerRow = worksheet.getRow(headerRowIndex);
+  const maxColumn = headerRow.cellCount;
+
+  const headers = [];
+  for (let col = 1; col <= maxColumn; col += 1) {
+    const headerValue = normalizeCellValue(headerRow.getCell(col).value);
+    headers.push(String(headerValue || '').trim());
+  }
+
+  const parsedRows = [];
+  for (let rowNumber = headerRowIndex + 1; rowNumber <= worksheet.rowCount; rowNumber += 1) {
+    const row = worksheet.getRow(rowNumber);
+    const rowObj = { __rowNum__: rowNumber - 1 };
+    let hasAnyValue = false;
+
+    for (let col = 1; col <= maxColumn; col += 1) {
+      const header = headers[col - 1];
+      if (!header) continue;
+      const value = normalizeCellValue(row.getCell(col).value);
+      rowObj[header] = value;
+      if (String(value || '').trim() !== '') hasAnyValue = true;
+    }
+
+    if (hasAnyValue) parsedRows.push(rowObj);
+  }
+
+  return parsedRows;
+};
+
 const loadExistingSequences = async () => {
   if (SKIP_AWS) {
     return new Map();
@@ -159,19 +221,18 @@ const nextWineId = (date, sequenceMap) => {
   return `${date.replace(/-/g, '')}-${next}`;
 };
 
-const workbook = xlsx.readFile(FILE_PATH, { cellDates: true });
-const targetSheet = SHEET_NAME || workbook.SheetNames[0];
-const sheet = workbook.Sheets[targetSheet];
+const workbook = new ExcelJS.Workbook();
+await workbook.xlsx.readFile(FILE_PATH);
+
+const targetSheet = SHEET_NAME || workbook.worksheets[0]?.name;
+const sheet = targetSheet ? workbook.getWorksheet(targetSheet) : null;
 
 if (!sheet) {
   console.error(`Sheet not found: ${targetSheet}`);
   process.exit(1);
 }
 
-const rows = xlsx.utils.sheet_to_json(sheet, {
-  defval: '',
-  range: Math.max(0, HEADER_ROW_INDEX - 1),
-});
+const rows = worksheetRowsToObjects(sheet, HEADER_ROW_INDEX);
 if (!rows.length) {
   console.log('No rows found in sheet, nothing to import.');
   process.exit(0);
