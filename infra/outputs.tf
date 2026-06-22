@@ -30,7 +30,7 @@ output "cloudfront_aliases" {
 
 output "cloudfront_custom_domain_enabled" {
   description = "Whether custom aliases are enabled on the CloudFront distribution."
-  value       = length(var.cloudfront_aliases) > 0
+  value       = length(aws_cloudfront_distribution.website_cdn.aliases) > 0
 }
 
 output "media_bucket_name" {

@@ -33,10 +33,6 @@ resource "aws_cloudfront_origin_access_control" "oac" {
   signing_behavior                  = "always"
 }
 
-locals {
-  use_custom_domain = length(var.cloudfront_aliases) > 0
-}
-
 resource "aws_cloudfront_distribution" "website_cdn" {
   enabled             = true
   is_ipv6_enabled     = true
@@ -115,10 +111,10 @@ resource "aws_cloudfront_distribution" "website_cdn" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = local.use_custom_domain ? false : true
-    acm_certificate_arn            = local.use_custom_domain ? var.cloudfront_acm_certificate_arn : null
-    ssl_support_method             = local.use_custom_domain ? "sni-only" : null
-    minimum_protocol_version       = local.use_custom_domain ? "TLSv1.2_2021" : null
+    cloudfront_default_certificate = length(var.cloudfront_aliases) == 0 ? true : false
+    acm_certificate_arn            = length(var.cloudfront_aliases) > 0 ? var.cloudfront_acm_certificate_arn : null
+    ssl_support_method             = length(var.cloudfront_aliases) > 0 ? "sni-only" : null
+    minimum_protocol_version       = length(var.cloudfront_aliases) > 0 ? "TLSv1.2_2021" : null
   }
 
   restrictions {
