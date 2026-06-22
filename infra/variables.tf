@@ -8,12 +8,6 @@ variable "aws_profile" {
   default = "dev"
 }
 
-variable "aws_assume_role_arn" {
-  description = "Optional role ARN for the AWS provider to assume (useful in CI where backend and resource accounts differ)."
-  type        = string
-  default     = ""
-}
-
 variable "cloudfront_aliases" {
   description = "Optional custom domain aliases for CloudFront (for example: [\"mandla.tech\", \"www.mandla.tech\"])."
   type        = list(string)
