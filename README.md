@@ -145,12 +145,44 @@ This repository includes a GitHub Actions workflow at `.github/workflows/deploy.
 
 Important: the Terraform remote state bucket lives in the `sec` profile/account, while the production website deployment goes through the `prod` profile/account. The workflow is split to use separate credentials for these two purposes.
 
+The workflow uses GitHub OIDC + role assumption (not long-lived access keys).
+
 To use it, add these repository secrets in GitHub:
 
-- `AWS_STATE_ACCESS_KEY_ID` — AWS key for the Terraform remote state backend (`sec` account/profile)
-- `AWS_STATE_SECRET_ACCESS_KEY`
-- `AWS_DEPLOY_ACCESS_KEY_ID` — AWS key for the website deployment account/profile (`prod`)
-- `AWS_DEPLOY_SECRET_ACCESS_KEY`
+- `AWS_STATE_ROLE_ARN` — IAM role ARN in the `sec` account (Terraform backend/state access)
+- `AWS_DEPLOY_ROLE_ARN` — IAM role ARN in the `prod` account (DynamoDB export + S3 deploy + CloudFront invalidation)
+
+Each AWS account that hosts one of these roles must have an IAM OpenID Connect provider configured for GitHub Actions:
+
+- Provider URL: `https://token.actions.githubusercontent.com`
+- Audience: `sts.amazonaws.com`
+
+Both roles must trust GitHub OIDC and allow `sts:AssumeRoleWithWebIdentity` with repo conditions. Example trust policy:
+
+```json
+{
+	"Version": "2012-10-17",
+	"Statement": [
+		{
+			"Effect": "Allow",
+			"Principal": {
+				"Federated": "arn:aws:iam::<ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com"
+			},
+			"Action": "sts:AssumeRoleWithWebIdentity",
+			"Condition": {
+				"StringEquals": {
+					"token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+				},
+				"StringLike": {
+					"token.actions.githubusercontent.com:sub": "repo:<OWNER>/<REPO>:ref:refs/heads/main"
+				}
+			}
+		}
+	]
+}
+```
+
+For this project, ensure `<OWNER>/<REPO>` exactly matches your GitHub repository slug (for example `m2rtenm/wine-tracker`). If this claim does not match exactly, role assumption fails even when OIDC is otherwise configured correctly.
 
 The workflow reads the target website bucket and CloudFront distribution ID directly from Terraform outputs in `infra/`.
 
