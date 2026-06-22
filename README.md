@@ -139,6 +139,45 @@ Override defaults with:
 terraform apply -var='aws_region=eu-north-1' -var='aws_profile=prod'
 ```
 
+### Custom domain for CloudFront (mandla.tech)
+
+CloudFront supports custom domains, but requires an ACM certificate in `us-east-1`.
+
+1. Request an ACM certificate in `us-east-1` for:
+- `mandla.tech`
+- `www.mandla.tech`
+- `wine.mandla.tech`
+
+2. Validate the certificate using DNS records in Zone.ee.
+
+3. Configure Terraform variables (for example in `infra/terraform.tfvars`):
+
+```hcl
+cloudfront_aliases            = ["mandla.tech", "www.mandla.tech", "wine.mandla.tech"]
+cloudfront_acm_certificate_arn = "arn:aws:acm:us-east-1:565393049153:certificate/REPLACE_ME"
+```
+
+4. Apply infrastructure:
+
+```bash
+cd infra
+terraform apply
+```
+
+5. Read CloudFront DNS target:
+
+```bash
+terraform output -raw cloudfront_distribution_domain
+```
+
+6. In Zone.ee DNS, point your domain to the CloudFront distribution:
+- Preferred for apex domain (`mandla.tech`): `ALIAS`/`ANAME` at `@` -> CloudFront domain from output above
+- If Zone.ee plan does not support apex `ALIAS`/`ANAME`, use `www` as `CNAME` to the CloudFront domain and set `mandla.tech` URL redirect to `https://www.mandla.tech`
+- Add `CNAME` record for `www` -> same CloudFront domain (recommended even when apex ALIAS is supported)
+- Add `CNAME` record for `wine` -> same CloudFront domain
+
+After DNS propagation, `mandla.tech`, `www.mandla.tech`, and `wine.mandla.tech` should resolve to CloudFront.
+
 ## GitHub Actions deployment
 
 This repository includes a GitHub Actions workflow at `.github/workflows/deploy.yml`.
@@ -196,6 +235,22 @@ The workflow runs on every push to `main` and performs:
 6. CloudFront invalidation for `/*`
 
 You can also trigger it manually from GitHub via `workflow_dispatch`.
+
+### Manual infrastructure changes
+
+Infrastructure code changes (files in `infra/`) are deployed manually:
+
+1. Make your Terraform changes in `infra/`.
+2. Test locally:
+```bash
+cd infra
+terraform plan
+terraform apply
+```
+
+3. Push changes to main once applied.
+
+The app deploy workflow will continue to work unchanged, reading outputs from applied Terraform state.
 
 ## Future work
 

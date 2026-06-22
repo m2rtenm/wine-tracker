@@ -18,6 +18,21 @@ output "cloudfront_distribution_id" {
   value       = aws_cloudfront_distribution.website_cdn.id
 }
 
+output "cloudfront_hosted_zone_id" {
+  description = "CloudFront hosted zone ID for Route53 alias records."
+  value       = aws_cloudfront_distribution.website_cdn.hosted_zone_id
+}
+
+output "cloudfront_aliases" {
+  description = "Configured CloudFront custom domain aliases."
+  value       = aws_cloudfront_distribution.website_cdn.aliases
+}
+
+output "cloudfront_custom_domain_enabled" {
+  description = "Whether custom aliases are enabled on the CloudFront distribution."
+  value       = length(var.cloudfront_aliases) > 0
+}
+
 output "media_bucket_name" {
   description = "S3 bucket name for wine bottle media uploads."
   value       = aws_s3_bucket.media.bucket
