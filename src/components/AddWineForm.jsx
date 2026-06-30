@@ -1,13 +1,193 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { COUNTRIES } from '../data/countries';
 
 const DEFAULT_MEMBERS = ['Marten', 'Mirjam', 'Alex', 'Sofia'];
+const CLOSURE_PRESETS = ['Screw cap', 'Cork'];
+const MAX_IMAGE_UPLOAD_BYTES = 2 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION = 1920;
+const JPEG_QUALITY_STEPS = [0.85, 0.75, 0.65, 0.55, 0.45];
 
 const createEmptyMemberRatings = memberNames =>
   memberNames.reduce((acc, name) => ({ ...acc, [name]: '' }), {});
 
+const formatBytes = bytes => {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 MB';
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+};
+
+const readFileAsDataUrl = fileOrBlob => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const result = typeof reader.result === 'string' ? reader.result : '';
+    const dataBase64 = result.includes(',') ? result.split(',')[1] : '';
+    if (!dataBase64) {
+      reject(new Error('Failed to read selected image file.'));
+      return;
+    }
+    resolve(dataBase64);
+  };
+  reader.onerror = () => reject(new Error('Failed to read selected image file.'));
+  reader.readAsDataURL(fileOrBlob);
+});
+
+const loadImageFromFile = file => new Promise((resolve, reject) => {
+  const image = new Image();
+  const objectUrl = URL.createObjectURL(file);
+
+  image.onload = () => {
+    URL.revokeObjectURL(objectUrl);
+    resolve(image);
+  };
+
+  image.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    reject(new Error('Failed to load selected image file.'));
+  };
+
+  image.src = objectUrl;
+});
+
+const canvasToBlob = (canvas, quality) => new Promise(resolve => {
+  canvas.toBlob(blob => resolve(blob), 'image/jpeg', quality);
+});
+
+const ensureJpegFileName = originalName => {
+  const base = (originalName || 'image').replace(/\.[^/.]+$/, '');
+  return `${base || 'image'}.jpg`;
+};
+
+const toUploadPayload = async selectedFile => {
+  if (!selectedFile?.type?.startsWith('image/')) {
+    const dataBase64 = await readFileAsDataUrl(selectedFile);
+    return {
+      fileName: selectedFile.name,
+      contentType: selectedFile.type || 'application/octet-stream',
+      dataBase64,
+      optimizedBytes: selectedFile.size,
+    };
+  }
+
+  let image;
+  try {
+    image = await loadImageFromFile(selectedFile);
+  } catch {
+    const dataBase64 = await readFileAsDataUrl(selectedFile);
+    return {
+      fileName: selectedFile.name,
+      contentType: selectedFile.type || 'application/octet-stream',
+      dataBase64,
+      optimizedBytes: selectedFile.size,
+    };
+  }
+
+  const baseScale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(image.width, image.height));
+  let scaleMultiplier = 1;
+  let bestBlob = null;
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const width = Math.max(1, Math.round(image.width * baseScale * scaleMultiplier));
+    const height = Math.max(1, Math.round(image.height * baseScale * scaleMultiplier));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext('2d');
+    if (!context) break;
+
+    context.drawImage(image, 0, 0, width, height);
+
+    for (const quality of JPEG_QUALITY_STEPS) {
+      const blob = await canvasToBlob(canvas, quality);
+      if (!blob) continue;
+
+      if (!bestBlob || blob.size < bestBlob.size) {
+        bestBlob = blob;
+      }
+
+      if (blob.size <= MAX_IMAGE_UPLOAD_BYTES) {
+        const dataBase64 = await readFileAsDataUrl(blob);
+        return {
+          fileName: ensureJpegFileName(selectedFile.name),
+          contentType: 'image/jpeg',
+          dataBase64,
+          optimizedBytes: blob.size,
+        };
+      }
+    }
+
+    scaleMultiplier *= 0.85;
+  }
+
+  if (!bestBlob) {
+    const dataBase64 = await readFileAsDataUrl(selectedFile);
+    return {
+      fileName: selectedFile.name,
+      contentType: selectedFile.type || 'application/octet-stream',
+      dataBase64,
+      optimizedBytes: selectedFile.size,
+    };
+  }
+
+  const dataBase64 = await readFileAsDataUrl(bestBlob);
+  return {
+    fileName: ensureJpegFileName(selectedFile.name),
+    contentType: 'image/jpeg',
+    dataBase64,
+    optimizedBytes: bestBlob.size,
+  };
+};
+
+const toInitialClosureFields = value => {
+  const closureValue = String(value || '').trim();
+  if (!closureValue) {
+    return { closureType: 'Screw cap', customClosureType: '' };
+  }
+
+  if (CLOSURE_PRESETS.includes(closureValue)) {
+    return { closureType: closureValue, customClosureType: '' };
+  }
+
+  return { closureType: 'Other', customClosureType: closureValue };
+};
+
+const createInitialFormState = (initialWine, memberNames, getTodayDate) => {
+  const closureFields = toInitialClosureFields(initialWine?.closureType);
+
+  if (initialWine) {
+    return {
+      tastedDate: initialWine.tastedDate || '',
+      wineName: initialWine.wineName || '',
+      country: initialWine.country || '',
+      berry: initialWine.berry || '',
+      closureType: closureFields.closureType,
+      customClosureType: closureFields.customClosureType,
+      vol: initialWine.vol || '',
+      comment: initialWine.comment || '',
+      memberRatings: memberNames.reduce((acc, name) => ({
+        ...acc,
+        [name]: initialWine.memberRatings?.[name] || '',
+      }), {}),
+    };
+  }
+
+  return {
+    tastedDate: getTodayDate(),
+    wineName: '',
+    country: '',
+    berry: '',
+    closureType: 'Screw cap',
+    customClosureType: '',
+    vol: '',
+    comment: '',
+    memberRatings: createEmptyMemberRatings(memberNames),
+  };
+};
+
 export default function AddWineForm({ isOpen, onClose, onSave, initialWine, existingWines = [] }) {
   const getTodayDate = () => new Date().toISOString().split('T')[0];
+  const cameraInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
 
   const memberNames = useMemo(() => {
     const set = new Set();
@@ -26,53 +206,10 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
     return names.length ? names : DEFAULT_MEMBERS;
   }, [existingWines, initialWine]);
 
-  const [formState, setFormState] = useState({
-    tastedDate: getTodayDate(),
-    wineName: '',
-    country: '',
-    berry: '',
-    closureType: 'Screw cap',
-    vol: '',
-    comment: '',
-    memberRatings: createEmptyMemberRatings(DEFAULT_MEMBERS),
-  });
+  const [formState, setFormState] = useState(() => createInitialFormState(initialWine, memberNames, getTodayDate));
   const [file, setFile] = useState(null);
   const [status, setStatus] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Pre-populate form when editing
-  useEffect(() => {
-    if (initialWine) {
-      setFormState({
-        tastedDate: initialWine.tastedDate || '',
-        wineName: initialWine.wineName || '',
-        country: initialWine.country || '',
-        berry: initialWine.berry || '',
-        closureType: initialWine.closureType || 'Screw cap',
-        vol: initialWine.vol || '',
-        comment: initialWine.comment || '',
-        memberRatings: memberNames.reduce((acc, name) => ({
-          ...acc,
-          [name]: initialWine.memberRatings?.[name] || '',
-        }), {}),
-      });
-      setFile(null);
-      setStatus('');
-    } else {
-      setFormState({
-        tastedDate: getTodayDate(),
-        wineName: '',
-        country: '',
-        berry: '',
-        closureType: 'Screw cap',
-        vol: '',
-        comment: '',
-        memberRatings: createEmptyMemberRatings(memberNames),
-      });
-      setFile(null);
-      setStatus('');
-    }
-  }, [isOpen, initialWine, memberNames]);
 
   const groupAverage = useMemo(() => {
     const validRatings = memberNames
@@ -87,7 +224,17 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
 
   const handleFieldChange = event => {
     const { name, value } = event.target;
-    setFormState(prev => ({ ...prev, [name]: value }));
+    setFormState(prev => {
+      if (name === 'closureType') {
+        return {
+          ...prev,
+          closureType: value,
+          customClosureType: value === 'Other' ? prev.customClosureType : '',
+        };
+      }
+
+      return { ...prev, [name]: value };
+    });
   };
 
   const handleRatingChange = (member, value) => {
@@ -103,6 +250,12 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
   const handleFileChange = event => {
     const selectedFile = event.target.files?.[0] || null;
     setFile(selectedFile);
+    if (selectedFile) {
+      setStatus(`Selected image: ${selectedFile.name} (${formatBytes(selectedFile.size)}).`);
+    }
+
+    // Allow selecting the same file again when using camera/gallery repeatedly.
+    event.target.value = '';
   };
 
   const generateWineId = date => {
@@ -116,26 +269,6 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
 
     return `${normalizedDate}-${maxSequence + 1}`;
   };
-
-  const toUploadPayload = selectedFile => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : '';
-      const dataBase64 = result.includes(',') ? result.split(',')[1] : '';
-      if (!dataBase64) {
-        reject(new Error('Failed to read selected image file.'));
-        return;
-      }
-
-      resolve({
-        fileName: selectedFile.name,
-        contentType: selectedFile.type || 'application/octet-stream',
-        dataBase64,
-      });
-    };
-    reader.onerror = () => reject(new Error('Failed to read selected image file.'));
-    reader.readAsDataURL(selectedFile);
-  });
 
   const handleSubmit = async event => {
     event.preventDefault();
@@ -158,13 +291,21 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
         return acc;
       }, {});
 
+      const normalizedClosureType = formState.closureType === 'Other'
+        ? formState.customClosureType.trim()
+        : formState.closureType;
+
+      if (!normalizedClosureType) {
+        throw new Error('Please provide a closure type.');
+      }
+
       const payload = {
         wineId,
         tastedDate: formState.tastedDate,
         wineName: formState.wineName,
         country: formState.country,
         berry: formState.berry,
-        closureType: formState.closureType,
+        closureType: normalizedClosureType,
         vol: Number(formState.vol) || 0,
         imageUrl: initialWine?.imageUrl ?? '',
         comment: formState.comment,
@@ -173,22 +314,15 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
       };
 
       if (file) {
+        setStatus('Optimizing image for upload...');
         payload.uploadImage = await toUploadPayload(file);
+        setStatus(`Image optimized to ${formatBytes(payload.uploadImage.optimizedBytes)}.`);
       }
 
       const savedWine = typeof onSave === 'function' ? await onSave(payload, { isEditing }) : payload;
 
       setStatus(isEditing ? 'Wine entry updated successfully.' : 'Wine entry saved successfully.');
-      setFormState({
-        tastedDate: getTodayDate(),
-        wineName: '',
-        country: '',
-        berry: '',
-        closureType: 'Screw cap',
-        vol: '',
-        comment: '',
-        memberRatings: createEmptyMemberRatings(memberNames),
-      });
+      setFormState(createInitialFormState(null, memberNames, getTodayDate));
       setFile(null);
       if (savedWine) {
         onClose();
@@ -256,17 +390,20 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
               <span className="text-sm font-semibold text-slate-700">Country</span>
-              <select
+              <input
+                list="country-options"
+                type="text"
                 name="country"
                 value={formState.country}
                 onChange={handleFieldChange}
+                placeholder="Type to filter countries..."
                 className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
-              >
-                <option value="">— Select country —</option>
+              />
+              <datalist id="country-options">
                 {COUNTRIES.map(c => (
-                  <option key={c.code} value={c.name}>{c.flag} {c.name}</option>
+                  <option key={c.code} value={c.name} />
                 ))}
-              </select>
+              </datalist>
             </label>
 
             <label className="block">
@@ -291,9 +428,25 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
               >
                 <option>Screw cap</option>
                 <option>Cork</option>
+                <option>Other</option>
               </select>
             </label>
           </div>
+
+          {formState.closureType === 'Other' && (
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">Custom Closure Type</span>
+              <input
+                type="text"
+                name="customClosureType"
+                value={formState.customClosureType}
+                onChange={handleFieldChange}
+                required
+                placeholder="e.g. Crown cap, synthetic cork, swing-top"
+                className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+              />
+            </label>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
@@ -310,15 +463,41 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
               />
             </label>
 
-            <label className="block">
+            <div className="block">
               <span className="text-sm font-semibold text-slate-700">Bottle Image (Optional)</span>
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  Take Photo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  Choose from Gallery
+                </button>
+              </div>
               <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <input
+                ref={galleryInputRef}
                 type="file"
                 accept="image/*"
                 onChange={handleFileChange}
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+                className="hidden"
               />
-            </label>
+              {file && <p className="mt-2 text-xs text-slate-500">Selected file: {file.name}</p>}
+            </div>
           </div>
 
           <label className="block">

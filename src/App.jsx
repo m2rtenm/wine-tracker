@@ -18,6 +18,9 @@ function App() {
   const readJsonOrThrow = async response => {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (response.status === 413) {
+        throw new Error('Image is too large to upload. Please use a smaller image and try again.');
+      }
       const message = payload?.message || `Request failed (${response.status})`;
       throw new Error(message);
     }
@@ -47,12 +50,12 @@ function App() {
         try {
           const snapshotResponse = await fetch('/data/wines.json', { cache: 'no-store' });
           if (!snapshotResponse.ok) {
-            throw new Error(`Failed to fetch snapshot (${snapshotResponse.status})`);
+            throw new Error(`Failed to fetch snapshot (${snapshotResponse.status})`, { cause: error });
           }
 
           const snapshot = await snapshotResponse.json();
           if (!Array.isArray(snapshot)) {
-            throw new Error('Snapshot response was not an array');
+            throw new Error('Snapshot response was not an array', { cause: error });
           }
 
           setWines(sortWines(snapshot));
@@ -156,6 +159,7 @@ function App() {
       </div>
 
       <AddWineForm
+        key={`${isFormOpen ? 'open' : 'closed'}-${editingWine?.wineId || 'new'}`}
         isOpen={isFormOpen}
         onClose={handleCloseForm}
         onSave={handleSaveWine}
