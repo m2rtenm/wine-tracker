@@ -140,6 +140,29 @@ function App() {
     }
   };
 
+  const handleRestoreDeleted = async () => {
+    const rawWineId = window.prompt('Enter wine ID to restore (for example: 20260701-1):');
+    const wineId = (rawWineId || '').trim();
+    if (!wineId) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/${encodeURIComponent(wineId)}/restore`, {
+        method: 'POST',
+      });
+
+      const restoredWine = await readJsonOrThrow(response);
+      if (restoredWine?.isDeleted) {
+        throw new Error('Wine restore failed: record is still marked as deleted.');
+      }
+
+      setWines(prev => sortWines([restoredWine, ...(prev || []).filter(item => item.wineId !== restoredWine.wineId)]));
+      window.alert(`Wine ${wineId} restored.`);
+    } catch (error) {
+      console.error('Failed to restore wine:', error);
+      window.alert(error?.message || 'Failed to restore wine.');
+    }
+  };
+
   const handleCloseForm = () => {
     setIsFormOpen(false);
     setEditingWine(null);
@@ -174,7 +197,12 @@ function App() {
 
         <DashboardMetrics wines={wines} />
 
-        <WineTable wines={wines} onEdit={handleEditWine} onDelete={handleDeleteWine} />
+        <WineTable
+          wines={wines}
+          onEdit={handleEditWine}
+          onDelete={handleDeleteWine}
+          onRestoreDeleted={handleRestoreDeleted}
+        />
       </div>
 
       <AddWineForm

@@ -47,7 +47,7 @@ def parse_body(event):
         return {}
 
 
-def scan_all_items():
+def scan_all_items(include_deleted=False):
     items = []
     kwargs = {}
 
@@ -57,6 +57,10 @@ def scan_all_items():
         if "LastEvaluatedKey" not in result:
             break
         kwargs["ExclusiveStartKey"] = result["LastEvaluatedKey"]
+
+    if include_deleted:
+        items.sort(key=lambda x: x.get("wineId", ""), reverse=True)
+        return items
 
     visible_items = [item for item in items if not item.get("isDeleted", False)]
     visible_items.sort(key=lambda x: x.get("wineId", ""), reverse=True)
@@ -153,7 +157,9 @@ def handler(event, _context):
         return response(200, {"ok": True})
 
     if method == "GET" and raw_path == "/api/wines":
-        return response(200, scan_all_items())
+        include_deleted_raw = (event.get("queryStringParameters") or {}).get("includeDeleted", "")
+        include_deleted = str(include_deleted_raw).lower() in {"1", "true", "yes"}
+        return response(200, scan_all_items(include_deleted=include_deleted))
 
     if method == "POST" and raw_path == "/api/wines":
         payload = parse_body(event)
@@ -212,5 +218,38 @@ def handler(event, _context):
             "wineId": wine_id,
             "item": attributes,
         })
+
+    if method == "POST" and raw_path.startswith("/api/wines/") and raw_path.endswith("/restore"):
+        wine_id = event.get("pathParameters", {}).get("wineId")
+        if not wine_id:
+            return response(400, {"message": "wineId path parameter is required"})
+
+        try:
+            updated = TABLE.update_item(
+                Key={"wineId": wine_id},
+                UpdateExpression="SET isDeleted = :is_deleted, deletedAt = :deleted_at",
+                ConditionExpression="attribute_exists(wineId)",
+                ExpressionAttributeValues={
+                    ":is_deleted": False,
+                    ":deleted_at": "",
+                },
+                ReturnValues="ALL_NEW",
+            )
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                return response(404, {
+                    "message": "Wine not found",
+                    "wineId": wine_id,
+                })
+            raise
+
+        attributes = updated.get("Attributes")
+        if not attributes:
+            return response(404, {
+                "message": "Wine not found",
+                "wineId": wine_id,
+            })
+
+        return response(200, attributes)
 
     return response(404, {"message": f"No route for {method} {raw_path}"})

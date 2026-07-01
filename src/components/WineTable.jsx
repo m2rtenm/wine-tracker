@@ -32,7 +32,7 @@ const formatGroupAverage = value => {
   return numeric.toFixed(2);
 };
 
-export default function WineTable({ wines = [], onEdit, onDelete }) {
+export default function WineTable({ wines = [], onEdit, onDelete, onRestoreDeleted }) {
   const [search, setSearch] = useState('');
   const [sorting, setSorting] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
@@ -277,13 +277,22 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
               <h2 className="text-xl font-semibold text-slate-900">Wine Records</h2>
               <p className="mt-1 text-xs text-slate-500 sm:text-sm">Search, sort, and browse your tasting history. Click on images or wine names to view bottles.</p>
             </div>
-            <input
-              type="search"
-              value={search}
-              onChange={e => { setSearch(e.target.value); setPage(0); }}
-              placeholder="Search all columns..."
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-500 focus:bg-white sm:px-4 sm:py-3 md:w-80"
-            />
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+              <button
+                type="button"
+                onClick={onRestoreDeleted}
+                className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+              >
+                Restore Deleted
+              </button>
+              <input
+                type="search"
+                value={search}
+                onChange={e => { setSearch(e.target.value); setPage(0); }}
+                placeholder="Search all columns..."
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-500 focus:bg-white sm:px-4 sm:py-3 md:w-80"
+              />
+            </div>
           </div>
 
           {/* Member Filter */}

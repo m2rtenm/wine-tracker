@@ -26,6 +26,40 @@ Key components:
 - Add and edit wine entries.
 - View bottle images in a modal.
 - Display tasting metrics.
+- Soft-delete entries and restore them later.
+
+## Soft Delete And Restore
+
+The application uses soft-delete semantics:
+
+- Deleting a wine marks the DynamoDB item with `isDeleted = true` and `deletedAt` timestamp.
+- Soft-deleted items are hidden from the default app list and `GET /api/wines`.
+- Media files remain in S3 and are not removed on soft-delete.
+
+### Restore from UI
+
+1. Open the app and go to **Wine Records**.
+2. Click **Restore Deleted**.
+3. Enter the `wineId` and confirm.
+4. The restored entry is returned to the visible list.
+
+### Find wineId for a deleted entry
+
+You can query all entries including deleted ones with:
+
+```bash
+curl "https://<api-id>.execute-api.<region>.amazonaws.com/api/wines?includeDeleted=true"
+```
+
+Then copy the `wineId` of the entry you want to restore.
+
+### Restore via API directly
+
+```bash
+curl -X POST "https://<api-id>.execute-api.<region>.amazonaws.com/api/wines/<wineId>/restore"
+```
+
+The response contains the restored item with `isDeleted = false` and `deletedAt = ""`.
 
 ## Tech stack
 

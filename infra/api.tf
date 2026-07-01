@@ -31,7 +31,8 @@ resource "aws_iam_role_policy" "wines_api_lambda_policy" {
         Action = [
           "dynamodb:Scan",
           "dynamodb:PutItem",
-          "dynamodb:DeleteItem"
+          "dynamodb:DeleteItem",
+          "dynamodb:UpdateItem"
         ]
         Resource = aws_dynamodb_table.wine_tracker.arn
       },
@@ -121,6 +122,12 @@ resource "aws_apigatewayv2_route" "wines_api_put" {
 resource "aws_apigatewayv2_route" "wines_api_delete" {
   api_id    = aws_apigatewayv2_api.wines_api.id
   route_key = "DELETE /api/wines/{wineId}"
+  target    = "integrations/${aws_apigatewayv2_integration.wines_api.id}"
+}
+
+resource "aws_apigatewayv2_route" "wines_api_restore" {
+  api_id    = aws_apigatewayv2_api.wines_api.id
+  route_key = "POST /api/wines/{wineId}/restore"
   target    = "integrations/${aws_apigatewayv2_integration.wines_api.id}"
 }
 
