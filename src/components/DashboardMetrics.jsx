@@ -54,17 +54,15 @@ export default function DashboardMetrics({ wines = [], onEdit }) {
 
   return (
     <section className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3 md:gap-4">
         <div className="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Total Wines Tasted</p>
           <p className="mt-4 text-4xl font-semibold text-slate-900">{totalWines}</p>
-          <p className="mt-2 text-sm text-slate-500">A quick count of all entries in your tracker.</p>
         </div>
 
         <div className="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Top Country</p>
           <p className="mt-4 text-4xl font-semibold text-slate-900">{topCountry}</p>
-          <p className="mt-2 text-sm text-slate-500">Country with the most wines in the list.</p>
         </div>
       </div>
 
@@ -91,7 +89,7 @@ export default function DashboardMetrics({ wines = [], onEdit }) {
         {topConsensusWines.length === 0 ? (
           <p className="mt-4 text-sm text-slate-500">No wines yet where at least {requiredTasterCount} members have submitted ratings.</p>
         ) : (
-          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-4">
             {topConsensusWines.map((wine, index) => {
               const tasterCount = countMemberRatings(wine.memberRatings);
               return (
@@ -102,17 +100,17 @@ export default function DashboardMetrics({ wines = [], onEdit }) {
                     className="block w-full"
                   >
                     {wine.imageUrl ? (
-                      <img src={wine.imageUrl} alt={wine.wineName || 'Wine bottle'} className="h-44 w-full object-cover" />
+                      <img src={wine.imageUrl} alt={wine.wineName || 'Wine bottle'} className="h-28 w-full object-cover sm:h-44" />
                     ) : (
-                      <div className="flex h-44 w-full items-center justify-center bg-slate-200 text-sm font-medium text-slate-500">
+                      <div className="flex h-28 w-full items-center justify-center bg-slate-200 text-xs font-medium text-slate-500 sm:h-44 sm:text-sm">
                         No image
                       </div>
                     )}
                   </button>
-                  <div className="space-y-1 px-4 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.15em] text-indigo-600">#{index + 1}</p>
-                    <p className="line-clamp-2 text-sm font-semibold text-slate-900">{wine.wineName || '-'}</p>
-                    <p className="text-xs text-slate-600">{wine.country || '-'} • Avg {formatGroupAverage(wine.groupAverage)} • {tasterCount} tasters</p>
+                  <div className="space-y-1 px-2 py-2 sm:px-4 sm:py-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-indigo-600 sm:text-xs">#{index + 1}</p>
+                    <p className="line-clamp-2 text-xs font-semibold text-slate-900 sm:text-sm">{wine.wineName || '-'}</p>
+                    <p className="text-[10px] text-slate-600 sm:text-xs">{wine.country || '-'} • Avg {formatGroupAverage(wine.groupAverage)} • {tasterCount} tasters</p>
                   </div>
                 </article>
               );
