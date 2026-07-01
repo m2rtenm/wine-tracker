@@ -297,7 +297,7 @@ export default function WineTable({ wines = [], onEdit, onDelete, onRestoreDelet
               <h2 className="text-xl font-semibold text-slate-900">Wine Records</h2>
               <p className="mt-1 text-xs text-slate-500 sm:text-sm">Search, sort, and browse your tasting history. Click on images or wine names to view bottles.</p>
             </div>
-            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-end md:w-auto md:flex-none">
               <button
                 type="button"
                 onClick={onRestoreDeleted}
