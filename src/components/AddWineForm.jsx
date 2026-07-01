@@ -396,7 +396,7 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
 
         <form onSubmit={handleSubmit} className="space-y-6 px-6 py-6">
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block">
+            <label className="block min-w-0">
               <span className="text-sm font-semibold text-slate-700">Tasted Date</span>
               <input
                 type="date"
@@ -404,7 +404,7 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
                 value={formState.tastedDate}
                 onChange={handleFieldChange}
                 required
-                className="mt-2 w-full min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+                className="mt-2 w-full min-w-0 max-w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
               />
             </label>
 
@@ -466,6 +466,21 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
               </select>
             </label>
 
+            {formState.drinkType === 'Other' && (
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">Custom Drink Type</span>
+                <input
+                  type="text"
+                  name="customDrinkType"
+                  value={formState.customDrinkType}
+                  onChange={handleFieldChange}
+                  required
+                  placeholder="e.g. Cider, Mead, Hard seltzer"
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+                />
+              </label>
+            )}
+
             <label className="block">
               <span className="text-sm font-semibold text-slate-700">Closure Type</span>
               <select
@@ -479,37 +494,22 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
                 <option>Other</option>
               </select>
             </label>
+
+            {formState.closureType === 'Other' && (
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">Custom Closure Type</span>
+                <input
+                  type="text"
+                  name="customClosureType"
+                  value={formState.customClosureType}
+                  onChange={handleFieldChange}
+                  required
+                  placeholder="e.g. Crown cap, synthetic cork, swing-top"
+                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+                />
+              </label>
+            )}
           </div>
-
-          {formState.drinkType === 'Other' && (
-            <label className="block">
-              <span className="text-sm font-semibold text-slate-700">Custom Drink Type</span>
-              <input
-                type="text"
-                name="customDrinkType"
-                value={formState.customDrinkType}
-                onChange={handleFieldChange}
-                required
-                placeholder="e.g. Cider, Mead, Hard seltzer"
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
-              />
-            </label>
-          )}
-
-          {formState.closureType === 'Other' && (
-            <label className="block">
-              <span className="text-sm font-semibold text-slate-700">Custom Closure Type</span>
-              <input
-                type="text"
-                name="customClosureType"
-                value={formState.customClosureType}
-                onChange={handleFieldChange}
-                required
-                placeholder="e.g. Crown cap, synthetic cork, swing-top"
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
-              />
-            </label>
-          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">

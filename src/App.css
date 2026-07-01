@@ -1,3 +1,12 @@
+input[type='date'] {
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+}
+
+input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+}
 /* Global mobile-friendly base styles */
 :root {
   color-scheme: light;
