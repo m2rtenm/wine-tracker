@@ -259,33 +259,34 @@ The workflow reads the target website bucket and CloudFront distribution ID dire
 
 Terraform behavior in CI/CD:
 
-- Every run executes `terraform init` and `terraform plan`.
-- `terraform apply` is gated behind a GitHub Environment approval step and only runs when you manually start the workflow with **Run workflow** (`workflow_dispatch`) and set:
-	- `apply_terraform = true`
-- The apply job targets the environment name from repository variable `TERRAFORM_APPLY_ENVIRONMENT`, so GitHub shows Approve/Reject controls based on that environment's protection rules.
+- The pipeline runs `terraform init` so it can read Terraform outputs (`website_bucket_name`, `cloudfront_distribution_id`, `dynamodb_table_name`) before deployment.
+- Infrastructure changes are not applied automatically in CI.
+- The workflow ends with a reminder to run Terraform manually for infra changes.
 
 The workflow runs on every push to `main` and performs:
 
 1. `npm ci`
 2. `npm run build`
 3. `terraform init` in `infra/`
-4. `terraform plan` in `infra/`
-5. `terraform output` to discover `website_bucket_name` and `cloudfront_distribution_id`
-6. `aws s3 sync dist/ s3://$WEBSITE_BUCKET --delete`
-7. CloudFront invalidation for `/*`
+4. `terraform output` to discover `website_bucket_name` and `cloudfront_distribution_id`
+5. `aws s3 sync dist/ s3://$WEBSITE_BUCKET --delete`
+6. CloudFront invalidation for `/*`
+7. Reminder log message to manually run `terraform plan` and `terraform apply` when infra changes are needed
 
 You can also trigger it manually from GitHub via `workflow_dispatch`.
 
-### Environment Approval Setup
+### Manual infrastructure changes
 
-To enable the Approve/Reject UI for Terraform apply:
+Infrastructure code changes (files in `infra/`) are deployed manually:
 
-1. In GitHub: `Settings` -> `Environments` -> create environment `production`.
-2. In GitHub: `Settings` -> `Secrets and variables` -> `Actions` -> `Variables`, add repository variable `TERRAFORM_APPLY_ENVIRONMENT` with value `production`.
-3. Add **Required reviewers** for the people who can approve Terraform apply.
-4. Optional: add deployment branch rules (for example allow only `main`).
-
-When `apply_terraform = true` on manual runs, the `terraform_apply` job pauses and waits for reviewer approval in the Actions UI.
+1. Make your Terraform changes in `infra/`.
+2. Test and apply locally:
+```bash
+cd infra
+terraform plan
+terraform apply
+```
+3. Push changes to main once applied.
 
 ## License
 
