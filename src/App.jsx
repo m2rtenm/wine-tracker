@@ -195,7 +195,7 @@ function App() {
           </div>
         </header>
 
-        <DashboardMetrics wines={wines} />
+        <DashboardMetrics wines={wines} onEdit={handleEditWine} />
 
         <WineTable
           wines={wines}

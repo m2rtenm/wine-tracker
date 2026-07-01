@@ -32,6 +32,8 @@ const formatGroupAverage = value => {
   return numeric.toFixed(2);
 };
 
+const hasMemberRating = rating => rating !== null && rating !== undefined && rating !== '';
+
 export default function WineTable({ wines = [], onEdit, onDelete, onRestoreDeleted }) {
   const [search, setSearch] = useState('');
   const [sorting, setSorting] = useState([]);
@@ -40,6 +42,7 @@ export default function WineTable({ wines = [], onEdit, onDelete, onRestoreDelet
   const [selectedMembers, setSelectedMembers] = useState(new Set());
   const [detailWine, setDetailWine] = useState(null);
   const [page, setPage] = useState(0);
+  const selectedMember = selectedMembers.size === 1 ? [...selectedMembers][0] : null;
 
   const memberKeys = useMemo(() => {
     const keys = new Set();
@@ -150,9 +153,10 @@ export default function WineTable({ wines = [], onEdit, onDelete, onRestoreDelet
         },
       },
       {
-        accessorKey: 'groupAverage',
-        header: 'Group Avg',
-        cell: info => formatGroupAverage(info.getValue()),
+        id: 'score',
+        accessorFn: row => row._displayAverage,
+        header: selectedMember ? `${selectedMember} Score` : 'Group Avg',
+        cell: info => formatGroupAverage(info.row.original._displayAverage),
       },
       {
         accessorKey: 'tastedDate',
@@ -192,7 +196,7 @@ export default function WineTable({ wines = [], onEdit, onDelete, onRestoreDelet
         },
       },
     ],
-    [onEdit, onDelete]
+    [onEdit, onDelete, selectedMember]
   );
 
   const filteredData = useMemo(() => {
@@ -221,29 +225,45 @@ export default function WineTable({ wines = [], onEdit, onDelete, onRestoreDelet
     if (selectedMembers.size > 0) {
       // If only one member selected, rank by their rating
       if (selectedMembers.size === 1) {
-        const selectedMember = [...selectedMembers][0];
+        const focusedMember = [...selectedMembers][0];
         const ranked = result.map(wine => ({
           wine,
-          memberRating: wine.memberRatings?.[selectedMember] ?? 0,
-        }));
-        
+          memberRating: wine.memberRatings?.[focusedMember],
+        }))
+          .filter(item => hasMemberRating(item.memberRating))
+          .map(item => ({ ...item, memberRating: Number(item.memberRating) }))
+          .filter(item => !Number.isNaN(item.memberRating));
+
         // Sort by member rating descending
         ranked.sort((a, b) => b.memberRating - a.memberRating);
-        
+
         // Add rank info to each wine for highlighting
         result = ranked.map((item, index) => {
           const topRank = index < 5 ? (index < 3 ? 'top3' : 'top5') : null;
-          return { ...item.wine, _topRank: topRank, _memberRating: item.memberRating };
+          return {
+            ...item.wine,
+            _topRank: topRank,
+            _memberRating: item.memberRating,
+            _displayAverage: item.memberRating,
+          };
         });
       } else {
         // Multiple members: just filter to wines that have ratings from selected members
         result = result.filter(wine => {
           return [...selectedMembers].some(member => {
             const rating = wine.memberRatings?.[member];
-            return rating !== null && rating !== undefined;
+            return hasMemberRating(rating);
           });
-        });
+        }).map(wine => ({
+          ...wine,
+          _displayAverage: wine.groupAverage,
+        }));
       }
+    } else {
+      result = result.map(wine => ({
+        ...wine,
+        _displayAverage: wine.groupAverage,
+      }));
     }
 
     return result;

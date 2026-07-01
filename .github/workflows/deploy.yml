@@ -106,6 +106,9 @@ jobs:
           aws-region: eu-north-1
           audience: sts.amazonaws.com
 
+      - name: Install dependencies
+        run: npm ci
+
       - name: Export DynamoDB snapshot
         run: npm run export:data
         env:
