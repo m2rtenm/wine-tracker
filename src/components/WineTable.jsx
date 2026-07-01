@@ -293,7 +293,7 @@ export default function WineTable({ wines = [], onEdit, onDelete, onRestoreDelet
       <div className="rounded-3xl border border-slate-200/70 bg-white p-4 shadow-sm sm:p-6">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div className="flex-1">
+            <div className="flex-1 md:max-w-2xl">
               <h2 className="text-xl font-semibold text-slate-900">Wine Records</h2>
               <p className="mt-1 text-xs text-slate-500 sm:text-sm">Search, sort, and browse your tasting history. Click on images or wine names to view bottles.</p>
             </div>
