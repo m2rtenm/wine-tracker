@@ -104,11 +104,6 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
         },
       },
       {
-        accessorKey: 'tastedDate',
-        header: 'Tasted',
-        cell: info => formatDate(info.getValue()),
-      },
-      {
         accessorKey: 'wineName',
         header: 'Wine Name',
         cell: info => {
@@ -145,11 +140,6 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
         },
       },
       {
-        accessorKey: 'groupAverage',
-        header: 'Group Avg',
-        cell: info => formatGroupAverage(info.getValue()),
-      },
-      {
         accessorKey: 'country',
         header: 'Country',
         cell: info => {
@@ -158,6 +148,16 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
           const flag = getCountryFlag(country);
           return <span>{flag ? `${flag} ` : ''}{country}</span>;
         },
+      },
+      {
+        accessorKey: 'groupAverage',
+        header: 'Group Avg',
+        cell: info => formatGroupAverage(info.getValue()),
+      },
+      {
+        accessorKey: 'tastedDate',
+        header: 'Tasted',
+        cell: info => formatDate(info.getValue()),
       },
       {
         id: 'actions',
@@ -207,6 +207,7 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
           wine.wineName,
           wine.country,
           wine.berry,
+          wine.drinkType,
           wine.closureType,
           String(wine.abv ?? wine.vol ?? ''),
           String(wine.groupAverage ?? ''),
@@ -452,6 +453,8 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
                 <dd className="text-slate-900">{getCountryFlag(detailWine.country)} {detailWine.country || '-'}</dd>
                 <dt className="font-medium text-slate-500">Berry / Grape</dt>
                 <dd className="text-slate-900">{detailWine.berry || '-'}</dd>
+                <dt className="font-medium text-slate-500">Drink Type</dt>
+                <dd className="text-slate-900">{detailWine.drinkType || 'Wine'}</dd>
                 <dt className="font-medium text-slate-500">Closure</dt>
                 <dd className="text-slate-900">{detailWine.closureType || '-'}</dd>
                 <dt className="font-medium text-slate-500">ABV</dt>

@@ -2,8 +2,10 @@ import base64
 import json
 import os
 from decimal import Decimal
+from datetime import datetime, timezone
 
 import boto3
+from botocore.exceptions import ClientError
 
 TABLE_NAME = os.environ["TABLE_NAME"]
 MEDIA_BUCKET = os.environ["MEDIA_BUCKET"]
@@ -56,8 +58,9 @@ def scan_all_items():
             break
         kwargs["ExclusiveStartKey"] = result["LastEvaluatedKey"]
 
-    items.sort(key=lambda x: x.get("wineId", ""), reverse=True)
-    return items
+    visible_items = [item for item in items if not item.get("isDeleted", False)]
+    visible_items.sort(key=lambda x: x.get("wineId", ""), reverse=True)
+    return visible_items
 
 
 def put_image_if_present(payload, wine_id):
@@ -95,10 +98,13 @@ def normalize_item(payload, wine_id):
         "country": payload.get("country", ""),
         "berry": payload.get("berry", ""),
         "closureType": payload.get("closureType", ""),
+        "drinkType": payload.get("drinkType", "Wine"),
         "vol": Decimal(str(payload.get("vol", 0) or 0)),
         "imageUrl": image_url,
         "comment": payload.get("comment", ""),
         "groupAverage": Decimal(str(payload.get("groupAverage", 0) or 0)),
+        "isDeleted": False,
+        "deletedAt": "",
         "memberRatings": {
             name: Decimal(str(value))
             for name, value in (payload.get("memberRatings") or {}).items()
@@ -170,20 +176,37 @@ def handler(event, _context):
         if not wine_id:
             return response(400, {"message": "wineId path parameter is required"})
 
+        deleted_at = datetime.now(timezone.utc).isoformat()
         try:
-            deleted_media_objects = delete_images_for_wine(wine_id)
-        except Exception as exc:
-            return response(500, {
-                "message": "Failed to delete wine images from media bucket",
+            updated = TABLE.update_item(
+                Key={"wineId": wine_id},
+                UpdateExpression="SET isDeleted = :is_deleted, deletedAt = :deleted_at",
+                ConditionExpression="attribute_exists(wineId)",
+                ExpressionAttributeValues={
+                    ":is_deleted": True,
+                    ":deleted_at": deleted_at,
+                },
+                ReturnValues="ALL_NEW",
+            )
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                return response(404, {
+                    "message": "Wine not found",
+                    "wineId": wine_id,
+                })
+            raise
+
+        attributes = updated.get("Attributes")
+        if not attributes:
+            return response(404, {
+                "message": "Wine not found",
                 "wineId": wine_id,
-                "error": str(exc),
             })
 
-        TABLE.delete_item(Key={"wineId": wine_id})
         return response(200, {
             "deleted": True,
             "wineId": wine_id,
-            "deletedMediaObjects": deleted_media_objects,
+            "item": attributes,
         })
 
     return response(404, {"message": f"No route for {method} {raw_path}"})

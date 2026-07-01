@@ -6,7 +6,9 @@ import mockWines from './mockWines.json';
 import './App.css';
 
 function App() {
-  const sortWines = winesToSort => [...winesToSort].sort((a, b) => (b.wineId || '').localeCompare(a.wineId || ''));
+  const sortWines = winesToSort => [...(winesToSort || [])]
+    .filter(wine => !wine?.isDeleted)
+    .sort((a, b) => (b.wineId || '').localeCompare(a.wineId || ''));
   const API_BASE = '/api/wines';
 
   const [wines, setWines] = useState(sortWines(mockWines));
@@ -109,7 +111,7 @@ function App() {
   };
 
   const handleDeleteWine = async wineId => {
-    if (window.confirm('Are you sure you want to delete this wine?')) {
+    if (window.confirm('Are you sure you want to delete this wine? It will be hidden from the app but kept in storage.')) {
       try {
         const response = await fetch(`${API_BASE}/${wineId}`, { method: 'DELETE' });
         await readJsonOrThrow(response);

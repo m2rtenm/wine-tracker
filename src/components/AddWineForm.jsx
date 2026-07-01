@@ -3,6 +3,7 @@ import { COUNTRIES } from '../data/countries';
 
 const DEFAULT_MEMBERS = ['Marten', 'Mirjam', 'Alex', 'Sofia'];
 const CLOSURE_PRESETS = ['Screw cap', 'Cork'];
+const DRINK_TYPE_PRESETS = ['Wine'];
 const MAX_IMAGE_UPLOAD_BYTES = 2 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 1920;
 const JPEG_QUALITY_STEPS = [0.85, 0.75, 0.65, 0.55, 0.45];
@@ -151,8 +152,22 @@ const toInitialClosureFields = value => {
   return { closureType: 'Other', customClosureType: closureValue };
 };
 
+const toInitialDrinkTypeFields = value => {
+  const drinkTypeValue = String(value || '').trim();
+  if (!drinkTypeValue) {
+    return { drinkType: 'Wine', customDrinkType: '' };
+  }
+
+  if (DRINK_TYPE_PRESETS.includes(drinkTypeValue)) {
+    return { drinkType: drinkTypeValue, customDrinkType: '' };
+  }
+
+  return { drinkType: 'Other', customDrinkType: drinkTypeValue };
+};
+
 const createInitialFormState = (initialWine, memberNames, getTodayDate) => {
   const closureFields = toInitialClosureFields(initialWine?.closureType);
+  const drinkTypeFields = toInitialDrinkTypeFields(initialWine?.drinkType);
 
   if (initialWine) {
     return {
@@ -160,6 +175,8 @@ const createInitialFormState = (initialWine, memberNames, getTodayDate) => {
       wineName: initialWine.wineName || '',
       country: initialWine.country || '',
       berry: initialWine.berry || '',
+      drinkType: drinkTypeFields.drinkType,
+      customDrinkType: drinkTypeFields.customDrinkType,
       closureType: closureFields.closureType,
       customClosureType: closureFields.customClosureType,
       vol: initialWine.vol || '',
@@ -176,6 +193,8 @@ const createInitialFormState = (initialWine, memberNames, getTodayDate) => {
     wineName: '',
     country: '',
     berry: '',
+    drinkType: 'Wine',
+    customDrinkType: '',
     closureType: 'Screw cap',
     customClosureType: '',
     vol: '',
@@ -225,6 +244,14 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
   const handleFieldChange = event => {
     const { name, value } = event.target;
     setFormState(prev => {
+      if (name === 'drinkType') {
+        return {
+          ...prev,
+          drinkType: value,
+          customDrinkType: value === 'Other' ? prev.customDrinkType : '',
+        };
+      }
+
       if (name === 'closureType') {
         return {
           ...prev,
@@ -294,9 +321,16 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
       const normalizedClosureType = formState.closureType === 'Other'
         ? formState.customClosureType.trim()
         : formState.closureType;
+      const normalizedDrinkType = formState.drinkType === 'Other'
+        ? formState.customDrinkType.trim()
+        : formState.drinkType;
 
       if (!normalizedClosureType) {
         throw new Error('Please provide a closure type.');
+      }
+
+      if (!normalizedDrinkType) {
+        throw new Error('Please provide a drink type.');
       }
 
       const payload = {
@@ -305,6 +339,7 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
         wineName: formState.wineName,
         country: formState.country,
         berry: formState.berry,
+        drinkType: normalizedDrinkType,
         closureType: normalizedClosureType,
         vol: Number(formState.vol) || 0,
         imageUrl: initialWine?.imageUrl ?? '',
@@ -369,7 +404,7 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
                 value={formState.tastedDate}
                 onChange={handleFieldChange}
                 required
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+                className="mt-2 w-full min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
               />
             </label>
 
@@ -419,6 +454,19 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
             </label>
 
             <label className="block">
+              <span className="text-sm font-semibold text-slate-700">Drink Type</span>
+              <select
+                name="drinkType"
+                value={formState.drinkType}
+                onChange={handleFieldChange}
+                className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+              >
+                <option>Wine</option>
+                <option>Other</option>
+              </select>
+            </label>
+
+            <label className="block">
               <span className="text-sm font-semibold text-slate-700">Closure Type</span>
               <select
                 name="closureType"
@@ -432,6 +480,21 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
               </select>
             </label>
           </div>
+
+          {formState.drinkType === 'Other' && (
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">Custom Drink Type</span>
+              <input
+                type="text"
+                name="customDrinkType"
+                value={formState.customDrinkType}
+                onChange={handleFieldChange}
+                required
+                placeholder="e.g. Cider, Mead, Hard seltzer"
+                className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+              />
+            </label>
+          )}
 
           {formState.closureType === 'Other' && (
             <label className="block">
