@@ -6,7 +6,6 @@ This repository contains:
 - a client-side React application in `src/`
 - sample wine data in `src/mockWines.json`
 - AWS infrastructure provisioning via Terraform in `infra/`
-- a task list in `TODO.md`
 
 ## Project overview
 
@@ -113,7 +112,6 @@ npm run lint
 - `src/index.css`, `src/App.css` — styling and Tailwind base styles
 - `infra/` — Terraform resources for AWS
 - `README.md` — this documentation
-- `TODO.md` — outstanding work and improvements
 
 ## AWS infrastructure
 
@@ -259,41 +257,35 @@ For this project, ensure `<OWNER>/<REPO>` exactly matches your GitHub repository
 
 The workflow reads the target website bucket and CloudFront distribution ID directly from Terraform outputs in `infra/`.
 
+Terraform behavior in CI/CD:
+
+- Every run executes `terraform init` and `terraform plan`.
+- `terraform apply` is gated behind a GitHub Environment approval step and only runs when you manually start the workflow with **Run workflow** (`workflow_dispatch`) and set:
+	- `apply_terraform = true`
+- The apply job targets the environment name from repository variable `TERRAFORM_APPLY_ENVIRONMENT`, so GitHub shows Approve/Reject controls based on that environment's protection rules.
+
 The workflow runs on every push to `main` and performs:
 
 1. `npm ci`
 2. `npm run build`
 3. `terraform init` in `infra/`
-4. `terraform output` to discover `website_bucket_name` and `cloudfront_distribution_id`
-5. `aws s3 sync dist/ s3://$WEBSITE_BUCKET --delete`
-6. CloudFront invalidation for `/*`
+4. `terraform plan` in `infra/`
+5. `terraform output` to discover `website_bucket_name` and `cloudfront_distribution_id`
+6. `aws s3 sync dist/ s3://$WEBSITE_BUCKET --delete`
+7. CloudFront invalidation for `/*`
 
 You can also trigger it manually from GitHub via `workflow_dispatch`.
 
-### Manual infrastructure changes
+### Environment Approval Setup
 
-Infrastructure code changes (files in `infra/`) are deployed manually:
+To enable the Approve/Reject UI for Terraform apply:
 
-1. Make your Terraform changes in `infra/`.
-2. Test locally:
-```bash
-cd infra
-terraform plan
-terraform apply
-```
+1. In GitHub: `Settings` -> `Environments` -> create environment `production`.
+2. In GitHub: `Settings` -> `Secrets and variables` -> `Actions` -> `Variables`, add repository variable `TERRAFORM_APPLY_ENVIRONMENT` with value `production`.
+3. Add **Required reviewers** for the people who can approve Terraform apply.
+4. Optional: add deployment branch rules (for example allow only `main`).
 
-3. Push changes to main once applied.
-
-The app deploy workflow will continue to work unchanged, reading outputs from applied Terraform state.
-
-## Future work
-
-See `TODO.md` for current tasks, including:
-- replacing mock data with live DynamoDB reads
-- adding secure AWS upload/authentication flows
-- improving mobile and desktop table layout
-- sorting same-day wines by composite date+ID keys
-- enhancing validation, error handling, and tests
+When `apply_terraform = true` on manual runs, the `terraform_apply` job pauses and waits for reviewer approval in the Actions UI.
 
 ## License
 

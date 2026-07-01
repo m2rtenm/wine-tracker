@@ -5,9 +5,186 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      apply_terraform:
+        description: "Run terraform apply"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
+  terraform_plan:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Validate required role configuration
+        env:
+          AWS_STATE_ROLE_ARN: ${{ secrets.AWS_STATE_ROLE_ARN }}
+          AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          if [ -z "$AWS_STATE_ROLE_ARN" ]; then
+            echo "Missing secret: AWS_STATE_ROLE_ARN"
+            exit 1
+          fi
+
+          if [ -z "$AWS_DEPLOY_ROLE_ARN" ]; then
+            echo "Missing secret: AWS_DEPLOY_ROLE_ARN"
+            exit 1
+          fi
+
+      - name: Validate role ARN formats and target accounts
+        env:
+          AWS_STATE_ROLE_ARN: ${{ secrets.AWS_STATE_ROLE_ARN }}
+          AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          STATE_ACCOUNT_ID=$(echo "$AWS_STATE_ROLE_ARN" | sed -E 's#^arn:aws:iam::([0-9]{12}):role/.+#\1#')
+          DEPLOY_ACCOUNT_ID=$(echo "$AWS_DEPLOY_ROLE_ARN" | sed -E 's#^arn:aws:iam::([0-9]{12}):role/.+#\1#')
+
+          if [ "$STATE_ACCOUNT_ID" = "$AWS_STATE_ROLE_ARN" ] || [ -z "$STATE_ACCOUNT_ID" ]; then
+            echo "AWS_STATE_ROLE_ARN is not a valid IAM role ARN"
+            exit 1
+          fi
+
+          if [ "$DEPLOY_ACCOUNT_ID" = "$AWS_DEPLOY_ROLE_ARN" ] || [ -z "$DEPLOY_ACCOUNT_ID" ]; then
+            echo "AWS_DEPLOY_ROLE_ARN is not a valid IAM role ARN"
+            exit 1
+          fi
+
+          if [ "$STATE_ACCOUNT_ID" != "311141538914" ]; then
+            echo "AWS_STATE_ROLE_ARN must target sec account 311141538914, got ${STATE_ACCOUNT_ID}"
+            exit 1
+          fi
+
+          if [ "$DEPLOY_ACCOUNT_ID" != "565393049153" ]; then
+            echo "AWS_DEPLOY_ROLE_ARN must target prod account 565393049153, got ${DEPLOY_ACCOUNT_ID}"
+            exit 1
+          fi
+
+          echo "Role ARNs validated for sec/prod accounts."
+
+      - name: Configure AWS credentials for Terraform backend
+        uses: aws-actions/configure-aws-credentials@v5.1.0
+        with:
+          role-to-assume: ${{ secrets.AWS_STATE_ROLE_ARN }}
+          role-session-name: gha-terraform-backend
+          aws-region: eu-north-1
+          audience: sts.amazonaws.com
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+          terraform_wrapper: false
+
+      - name: Initialize Terraform
+        working-directory: infra
+        run: terraform init -input=false
+
+      - name: Terraform plan
+        working-directory: infra
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Terraform plan summary
+        working-directory: infra
+        run: terraform show -no-color tfplan
+
+  terraform_apply:
+    needs: terraform_plan
+    if: github.event_name == 'workflow_dispatch' && inputs.apply_terraform
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ vars.TERRAFORM_APPLY_ENVIRONMENT }}
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate required role configuration
+        env:
+          AWS_STATE_ROLE_ARN: ${{ secrets.AWS_STATE_ROLE_ARN }}
+          AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          if [ -z "$AWS_STATE_ROLE_ARN" ]; then
+            echo "Missing secret: AWS_STATE_ROLE_ARN"
+            exit 1
+          fi
+
+          if [ -z "$AWS_DEPLOY_ROLE_ARN" ]; then
+            echo "Missing secret: AWS_DEPLOY_ROLE_ARN"
+            exit 1
+          fi
+
+      - name: Validate role ARN formats and target accounts
+        env:
+          AWS_STATE_ROLE_ARN: ${{ secrets.AWS_STATE_ROLE_ARN }}
+          AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          STATE_ACCOUNT_ID=$(echo "$AWS_STATE_ROLE_ARN" | sed -E 's#^arn:aws:iam::([0-9]{12}):role/.+#\1#')
+          DEPLOY_ACCOUNT_ID=$(echo "$AWS_DEPLOY_ROLE_ARN" | sed -E 's#^arn:aws:iam::([0-9]{12}):role/.+#\1#')
+
+          if [ "$STATE_ACCOUNT_ID" = "$AWS_STATE_ROLE_ARN" ] || [ -z "$STATE_ACCOUNT_ID" ]; then
+            echo "AWS_STATE_ROLE_ARN is not a valid IAM role ARN"
+            exit 1
+          fi
+
+          if [ "$DEPLOY_ACCOUNT_ID" = "$AWS_DEPLOY_ROLE_ARN" ] || [ -z "$DEPLOY_ACCOUNT_ID" ]; then
+            echo "AWS_DEPLOY_ROLE_ARN is not a valid IAM role ARN"
+            exit 1
+          fi
+
+          if [ "$STATE_ACCOUNT_ID" != "311141538914" ]; then
+            echo "AWS_STATE_ROLE_ARN must target sec account 311141538914, got ${STATE_ACCOUNT_ID}"
+            exit 1
+          fi
+
+          if [ "$DEPLOY_ACCOUNT_ID" != "565393049153" ]; then
+            echo "AWS_DEPLOY_ROLE_ARN must target prod account 565393049153, got ${DEPLOY_ACCOUNT_ID}"
+            exit 1
+          fi
+
+          echo "Role ARNs validated for sec/prod accounts."
+
+      - name: Configure AWS credentials for Terraform backend
+        uses: aws-actions/configure-aws-credentials@v5.1.0
+        with:
+          role-to-assume: ${{ secrets.AWS_STATE_ROLE_ARN }}
+          role-session-name: gha-terraform-backend-apply
+          aws-region: eu-north-1
+          audience: sts.amazonaws.com
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+          terraform_wrapper: false
+
+      - name: Initialize Terraform
+        working-directory: infra
+        run: terraform init -input=false
+
+      - name: Terraform apply
+        working-directory: infra
+        run: terraform apply -input=false -auto-approve
+
   deploy:
+    needs:
+      - terraform_plan
+      - terraform_apply
+    if: needs.terraform_plan.result == 'success' && (needs.terraform_apply.result == 'success' || needs.terraform_apply.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -78,7 +255,7 @@ jobs:
           aws-region: eu-north-1
           audience: sts.amazonaws.com
 
-      - name: Terraform init
+      - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.5.0
