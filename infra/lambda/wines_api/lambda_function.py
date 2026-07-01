@@ -90,6 +90,10 @@ def put_image_if_present(payload, wine_id):
 
 def normalize_item(payload, wine_id):
     image_url = put_image_if_present(payload, wine_id)
+    is_deleted = bool(payload.get("isDeleted", False))
+    deleted_at = payload.get("deletedAt", "")
+    if is_deleted and not deleted_at:
+        deleted_at = datetime.now(timezone.utc).isoformat()
 
     return {
         "wineId": wine_id,
@@ -103,8 +107,8 @@ def normalize_item(payload, wine_id):
         "imageUrl": image_url,
         "comment": payload.get("comment", ""),
         "groupAverage": Decimal(str(payload.get("groupAverage", 0) or 0)),
-        "isDeleted": False,
-        "deletedAt": "",
+        "isDeleted": is_deleted,
+        "deletedAt": deleted_at if is_deleted else "",
         "memberRatings": {
             name: Decimal(str(value))
             for name, value in (payload.get("memberRatings") or {}).items()

@@ -182,7 +182,7 @@ export default function WineTable({ wines = [], onEdit, onDelete }) {
               </button>
               <button
                 type="button"
-                onClick={() => onDelete(wine.wineId)}
+                onClick={() => onDelete(wine)}
                 className="inline-flex items-center rounded-lg bg-red-100 px-2 py-1 text-xs font-medium text-red-700 transition hover:bg-red-200"
               >
                 Delete

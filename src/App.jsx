@@ -110,12 +110,29 @@ function App() {
     setIsFormOpen(true);
   };
 
-  const handleDeleteWine = async wineId => {
+  const handleDeleteWine = async wine => {
+    if (!wine?.wineId) return;
+
     if (window.confirm('Are you sure you want to delete this wine? It will be hidden from the app but kept in storage.')) {
       try {
-        const response = await fetch(`${API_BASE}/${wineId}`, { method: 'DELETE' });
-        await readJsonOrThrow(response);
-        setWines(prev => prev.filter(wine => wine.wineId !== wineId));
+        const response = await fetch(`${API_BASE}/${wine.wineId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...wine,
+            isDeleted: true,
+            deletedAt: new Date().toISOString(),
+          }),
+        });
+
+        const savedWine = await readJsonOrThrow(response);
+        if (!savedWine?.isDeleted) {
+          throw new Error('Soft delete is not available in the deployed API yet. Please deploy the latest backend before deleting entries.');
+        }
+
+        setWines(prev => prev.filter(item => item.wineId !== wine.wineId));
       } catch (error) {
         console.error('Failed to delete wine:', error);
         window.alert(error?.message || 'Failed to delete wine.');
