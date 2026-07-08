@@ -585,7 +585,7 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
                     type="number"
                     min="0"
                     max="5"
-                    step="0.5"
+                    step="any"
                     value={formState.memberRatings[member]}
                     onChange={event => handleRatingChange(member, event.target.value)}
                     className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500"
