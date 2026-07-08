@@ -17,7 +17,10 @@ echo "Exporting DynamoDB snapshot..."
 AWS_PROFILE="$AWS_PROFILE" AWS_REGION="$AWS_REGION" DDB_TABLE="$DDB_TABLE" npm --prefix "$ROOT_DIR" run export:data
 
 echo "Building frontend..."
-npm --prefix "$ROOT_DIR" run build
+VITE_COGNITO_AUTHORITY="$(terraform -chdir="$INFRA_DIR" output -raw cognito_authority)" \
+VITE_COGNITO_CLIENT_ID="$(terraform -chdir="$INFRA_DIR" output -raw cognito_user_pool_client_id)" \
+VITE_COGNITO_HOSTED_UI="$(terraform -chdir="$INFRA_DIR" output -raw cognito_hosted_ui_domain)" \
+  npm --prefix "$ROOT_DIR" run build
 
 echo "Syncing dist/ to s3://$WEBSITE_BUCKET ..."
 AWS_PROFILE="$AWS_PROFILE" aws --no-cli-pager s3 sync "$ROOT_DIR/dist/" "s3://$WEBSITE_BUCKET" --delete

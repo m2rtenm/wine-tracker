@@ -92,10 +92,16 @@ jobs:
           WEBSITE_BUCKET=$(terraform output -raw website_bucket_name)
           CLOUDFRONT_DISTRIBUTION_ID=$(terraform output -raw cloudfront_distribution_id)
           DDB_TABLE=$(terraform output -raw dynamodb_table_name)
+          COGNITO_AUTHORITY=$(terraform output -raw cognito_authority)
+          COGNITO_CLIENT_ID=$(terraform output -raw cognito_user_pool_client_id)
+          COGNITO_HOSTED_UI=$(terraform output -raw cognito_hosted_ui_domain)
           {
             echo "WEBSITE_BUCKET=${WEBSITE_BUCKET}"
             echo "CLOUDFRONT_DISTRIBUTION_ID=${CLOUDFRONT_DISTRIBUTION_ID}"
             echo "DDB_TABLE=${DDB_TABLE}"
+            echo "COGNITO_AUTHORITY=${COGNITO_AUTHORITY}"
+            echo "COGNITO_CLIENT_ID=${COGNITO_CLIENT_ID}"
+            echo "COGNITO_HOSTED_UI=${COGNITO_HOSTED_UI}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials for deployment
@@ -117,6 +123,10 @@ jobs:
 
       - name: Build production bundle
         run: npm run build
+        env:
+          VITE_COGNITO_AUTHORITY: ${{ steps.tf_outputs.outputs.COGNITO_AUTHORITY }}
+          VITE_COGNITO_CLIENT_ID: ${{ steps.tf_outputs.outputs.COGNITO_CLIENT_ID }}
+          VITE_COGNITO_HOSTED_UI: ${{ steps.tf_outputs.outputs.COGNITO_HOSTED_UI }}
 
       - name: Deploy build to S3
         run: aws s3 sync dist/ "s3://${WEBSITE_BUCKET}" --delete

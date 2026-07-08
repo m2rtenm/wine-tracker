@@ -101,34 +101,59 @@ resource "aws_apigatewayv2_integration" "wines_api" {
   payload_format_version = "2.0"
 }
 
+# JWT authorizer validating Cognito-issued tokens. The whole app is gated, so
+# it is attached to every route below. Automatic CORS preflight (OPTIONS) is
+# not subject to the authorizer on HTTP APIs.
+resource "aws_apigatewayv2_authorizer" "cognito_jwt" {
+  api_id           = aws_apigatewayv2_api.wines_api.id
+  authorizer_type  = "JWT"
+  identity_sources = ["$request.header.Authorization"]
+  name             = "wine-tracker-cognito-jwt"
+
+  jwt_configuration {
+    audience = [aws_cognito_user_pool_client.web.id]
+    issuer   = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.wine.id}"
+  }
+}
+
 resource "aws_apigatewayv2_route" "wines_api_get" {
-  api_id    = aws_apigatewayv2_api.wines_api.id
-  route_key = "GET /api/wines"
-  target    = "integrations/${aws_apigatewayv2_integration.wines_api.id}"
+  api_id             = aws_apigatewayv2_api.wines_api.id
+  route_key          = "GET /api/wines"
+  target             = "integrations/${aws_apigatewayv2_integration.wines_api.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_route" "wines_api_post" {
-  api_id    = aws_apigatewayv2_api.wines_api.id
-  route_key = "POST /api/wines"
-  target    = "integrations/${aws_apigatewayv2_integration.wines_api.id}"
+  api_id             = aws_apigatewayv2_api.wines_api.id
+  route_key          = "POST /api/wines"
+  target             = "integrations/${aws_apigatewayv2_integration.wines_api.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_route" "wines_api_put" {
-  api_id    = aws_apigatewayv2_api.wines_api.id
-  route_key = "PUT /api/wines/{wineId}"
-  target    = "integrations/${aws_apigatewayv2_integration.wines_api.id}"
+  api_id             = aws_apigatewayv2_api.wines_api.id
+  route_key          = "PUT /api/wines/{wineId}"
+  target             = "integrations/${aws_apigatewayv2_integration.wines_api.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_route" "wines_api_delete" {
-  api_id    = aws_apigatewayv2_api.wines_api.id
-  route_key = "DELETE /api/wines/{wineId}"
-  target    = "integrations/${aws_apigatewayv2_integration.wines_api.id}"
+  api_id             = aws_apigatewayv2_api.wines_api.id
+  route_key          = "DELETE /api/wines/{wineId}"
+  target             = "integrations/${aws_apigatewayv2_integration.wines_api.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_route" "wines_api_restore" {
-  api_id    = aws_apigatewayv2_api.wines_api.id
-  route_key = "POST /api/wines/{wineId}/restore"
-  target    = "integrations/${aws_apigatewayv2_integration.wines_api.id}"
+  api_id             = aws_apigatewayv2_api.wines_api.id
+  route_key          = "POST /api/wines/{wineId}/restore"
+  target             = "integrations/${aws_apigatewayv2_integration.wines_api.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
 resource "aws_apigatewayv2_stage" "wines_api" {

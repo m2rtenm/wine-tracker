@@ -47,3 +47,28 @@ output "wines_api_id" {
   description = "HTTP API ID for wines CRUD."
   value       = aws_apigatewayv2_api.wines_api.id
 }
+
+output "cognito_user_pool_id" {
+  description = "Cognito User Pool ID."
+  value       = aws_cognito_user_pool.wine.id
+}
+
+output "cognito_user_pool_client_id" {
+  description = "Cognito app client ID used by the SPA (also the JWT audience)."
+  value       = aws_cognito_user_pool_client.web.id
+}
+
+output "cognito_authority" {
+  description = "OIDC issuer/authority URL for the Cognito User Pool."
+  value       = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.wine.id}"
+}
+
+output "cognito_hosted_ui_domain" {
+  description = "Cognito Hosted UI domain (used for login and logout endpoints)."
+  value       = "https://${aws_cognito_user_pool_domain.wine.domain}.auth.${var.aws_region}.amazoncognito.com"
+}
+
+output "cognito_google_redirect_uri" {
+  description = "Authorized redirect URI to register in the Google OAuth client."
+  value       = "https://${aws_cognito_user_pool_domain.wine.domain}.auth.${var.aws_region}.amazoncognito.com/oauth2/idpresponse"
+}

@@ -122,6 +122,9 @@ Terraform in `infra/` provisions the following:
 - `aws_s3_bucket.website` for the static website host
 - `aws_cloudfront_distribution.website_cdn` for website delivery
 - bucket ACLs and CORS settings for media uploads
+- `aws_cognito_user_pool.wine` with Google federation and Hosted UI for authentication
+- `aws_apigatewayv2_authorizer.cognito_jwt` gating every API route with a Cognito JWT
+- `aws_lambda_function.pre_signup` enforcing an email allowlist at sign-up
 
 ### Terraform backend
 
@@ -153,6 +156,65 @@ Default variable values in `infra/terraform.tfvars`:
 - Direct AWS SDK use in the browser is not secure for production.
 - The current code uses static bucket and table names and would need a backend or signed upload flow for safe deployment.
 - Terraform backend and provider profiles differ (`sec` vs `dev`), so AWS profiles must be configured accordingly.
+
+## Authentication (Cognito + Google)
+
+The app is fully gated behind Google sign-in, brokered by an AWS Cognito User
+Pool. The SPA runs the Authorization Code + PKCE flow via the Cognito Hosted UI
+(which redirects straight to Google), and the API Gateway validates the
+resulting JWT on every route. Access is restricted to an explicit email
+allowlist enforced by a Pre-Sign-Up Lambda — any Google account not on the list
+is rejected at sign-up.
+
+### One-time setup
+
+Because Cognito federation and the Google OAuth client reference each other,
+create them in this order:
+
+1. **Choose the Hosted UI domain prefix.** Default is `wine-tracker-auth`
+   (`var.cognito_domain_prefix`), giving
+   `https://wine-tracker-auth.auth.eu-north-1.amazoncognito.com`. Override it in
+   `terraform.tfvars` if the prefix is already taken in the region.
+
+2. **Create a Google OAuth 2.0 client** in the
+   [Google Cloud Console](https://console.cloud.google.com/apis/credentials) →
+   *Create Credentials* → *OAuth client ID* → *Web application*:
+   - **Authorized JavaScript origins:** the Hosted UI origin, e.g.
+     `https://wine-tracker-auth.auth.eu-north-1.amazoncognito.com`
+   - **Authorized redirect URI:**
+     `https://wine-tracker-auth.auth.eu-north-1.amazoncognito.com/oauth2/idpresponse`
+     (this is also emitted as the `cognito_google_redirect_uri` Terraform output)
+   - Copy the generated **Client ID** and **Client secret**.
+
+3. **Fill `infra/terraform.tfvars`** (gitignored — see
+   `infra/terraform.tfvars.example`):
+   ```hcl
+   google_client_id     = "xxxx.apps.googleusercontent.com"
+   google_client_secret = "GOCSPX-xxxx"
+   allowed_emails       = ["member1@gmail.com", "member2@gmail.com"]
+   ```
+
+4. **Apply Terraform** (`terraform apply` from `infra/`). Note the outputs
+   `cognito_authority`, `cognito_user_pool_client_id`, and
+   `cognito_hosted_ui_domain`.
+
+5. **Deploy the frontend.** CI (`.github/workflows/deploy.yml`) and
+   `scripts/deploy-snapshot.sh` read those outputs automatically and pass them
+   to the Vite build as `VITE_COGNITO_*`. No new GitHub secrets are needed — the
+   Cognito IDs are public; only the Google client secret is sensitive and it
+   lives solely in `terraform.tfvars` / Terraform state.
+
+### Managing access
+
+Add or remove entries in `allowed_emails` and re-run `terraform apply`. Removing
+an email blocks future sign-ups; to revoke an already-registered user, also
+delete them from the User Pool (console or `aws cognito-idp admin-delete-user`).
+
+### Local development
+
+For `npm run dev`, copy `.env.example` to `.env.local` and fill in the three
+`VITE_COGNITO_*` values from the Terraform outputs. `http://localhost:5173/` is
+pre-registered as an allowed callback URL (`var.auth_extra_callback_urls`).
 
 ## Infra deployment
 
