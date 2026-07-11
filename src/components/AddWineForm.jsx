@@ -395,6 +395,42 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6 px-6 py-6">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <span className="text-sm font-semibold text-slate-800">Bottle Image (Optional)</span>
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                Take Photo
+              </button>
+              <button
+                type="button"
+                onClick={() => galleryInputRef.current?.click()}
+                className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                Choose from Gallery
+              </button>
+            </div>
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            {file && <p className="mt-2 text-xs text-slate-500">Selected file: {file.name}</p>}
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block min-w-0">
               <span className="text-sm font-semibold text-slate-700">Tasted Date</span>
@@ -511,57 +547,19 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
             )}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-sm font-semibold text-slate-700">ABV / Vol (%)</span>
-              <input
-                type="number"
-                name="vol"
-                step="0.1"
-                min="0"
-                value={formState.vol}
-                onChange={handleFieldChange}
-                placeholder="e.g. 13.5"
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
-              />
-            </label>
-
-            <div className="block">
-              <span className="text-sm font-semibold text-slate-700">Bottle Image (Optional)</span>
-              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => cameraInputRef.current?.click()}
-                  className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-                >
-                  Take Photo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => galleryInputRef.current?.click()}
-                  className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-                >
-                  Choose from Gallery
-                </button>
-              </div>
-              <input
-                ref={cameraInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-              <input
-                ref={galleryInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-              {file && <p className="mt-2 text-xs text-slate-500">Selected file: {file.name}</p>}
-            </div>
-          </div>
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700">ABV / Vol (%)</span>
+            <input
+              type="number"
+              name="vol"
+              step="0.1"
+              min="0"
+              value={formState.vol}
+              onChange={handleFieldChange}
+              placeholder="e.g. 13.5"
+              className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+            />
+          </label>
 
           <label className="block">
             <span className="text-sm font-semibold text-slate-700">Tasting Notes</span>
