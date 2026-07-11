@@ -217,7 +217,7 @@ export default function WineTable({ wines = [], onEdit, onDelete, onRestoreDelet
           String(wine.groupAverage ?? ''),
           ...memberKeys.map(member => String(wine.memberRatings?.[member] ?? '')),
         ];
-        return rowValues.some(value => value.toLowerCase().includes(query));
+        return rowValues.some(value => String(value ?? '').toLowerCase().includes(query));
       });
     }
 
