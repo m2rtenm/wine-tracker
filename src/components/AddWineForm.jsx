@@ -440,7 +440,7 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
                 value={formState.tastedDate}
                 onChange={handleFieldChange}
                 required
-                className="mt-2 w-full min-w-0 max-w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+                className="mt-2 block w-full min-w-0 max-w-full appearance-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
               />
             </label>
 
