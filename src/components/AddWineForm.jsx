@@ -7,6 +7,9 @@ const DRINK_TYPE_PRESETS = ['Wine'];
 const MAX_IMAGE_UPLOAD_BYTES = 2 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 1920;
 const JPEG_QUALITY_STEPS = [0.85, 0.75, 0.65, 0.55, 0.45];
+// Tasting dates are the Estonian calendar date, independent of the device's
+// timezone, so a member abroad still records the local club date.
+const APP_TIME_ZONE = 'Europe/Tallinn';
 
 const createEmptyMemberRatings = memberNames =>
   memberNames.reduce((acc, name) => ({ ...acc, [name]: '' }), {});
@@ -204,7 +207,7 @@ const createInitialFormState = (initialWine, memberNames, getTodayDate) => {
 };
 
 export default function AddWineForm({ isOpen, onClose, onSave, initialWine, existingWines = [] }) {
-  const getTodayDate = () => new Date().toISOString().split('T')[0];
+  const getTodayDate = () => new Date().toLocaleDateString('en-CA', { timeZone: APP_TIME_ZONE });
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
 
