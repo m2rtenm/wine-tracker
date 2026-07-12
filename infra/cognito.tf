@@ -9,6 +9,30 @@ locals {
 }
 
 # ---------------------------------------------------------------------------
+# Secrets sourced from SSM Parameter Store (Standard tier, SecureString with the
+# default aws/ssm KMS key = $0). Create them once per account, out of band:
+#   aws ssm put-parameter --region eu-north-1 --type SecureString \
+#     --name /wine-tracker/google_client_id     --value "xxxx.apps.googleusercontent.com"
+#   aws ssm put-parameter --region eu-north-1 --type SecureString \
+#     --name /wine-tracker/google_client_secret --value "GOCSPX-xxxx"
+#   aws ssm put-parameter --region eu-north-1 --type SecureString \
+#     --name /wine-tracker/allowed_emails       --value '["a@gmail.com","b@gmail.com"]'
+# This keeps them out of git and off every dev machine — any device with AWS
+# creds reads them at apply time. with_decryption defaults to true.
+# ---------------------------------------------------------------------------
+data "aws_ssm_parameter" "google_client_id" {
+  name = "/wine-tracker/google_client_id"
+}
+
+data "aws_ssm_parameter" "google_client_secret" {
+  name = "/wine-tracker/google_client_secret"
+}
+
+data "aws_ssm_parameter" "allowed_emails" {
+  name = "/wine-tracker/allowed_emails"
+}
+
+# ---------------------------------------------------------------------------
 # Pre-Sign-Up Lambda: enforces the email allowlist for federated sign-ups.
 # ---------------------------------------------------------------------------
 data "archive_file" "pre_signup_zip" {
@@ -64,7 +88,7 @@ resource "aws_lambda_function" "pre_signup" {
 
   environment {
     variables = {
-      ALLOWED_EMAILS = join(",", var.allowed_emails)
+      ALLOWED_EMAILS = join(",", jsondecode(data.aws_ssm_parameter.allowed_emails.value))
     }
   }
 }
@@ -118,9 +142,17 @@ resource "aws_cognito_identity_provider" "google" {
   provider_type = "Google"
 
   provider_details = {
-    client_id        = var.google_client_id
-    client_secret    = var.google_client_secret
+    client_id        = data.aws_ssm_parameter.google_client_id.value
+    client_secret    = data.aws_ssm_parameter.google_client_secret.value
     authorize_scopes = "openid email profile"
+    # Cognito auto-populates these standard Google endpoints after creation.
+    # Declaring them keeps config == state and avoids a perpetual plan diff.
+    attributes_url                = "https://people.googleapis.com/v1/people/me?personFields="
+    attributes_url_add_attributes = "true"
+    authorize_url                 = "https://accounts.google.com/o/oauth2/v2/auth"
+    oidc_issuer                   = "https://accounts.google.com"
+    token_request_method          = "POST"
+    token_url                     = "https://www.googleapis.com/oauth2/v4/token"
   }
 
   attribute_mapping = {

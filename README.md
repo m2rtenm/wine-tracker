@@ -138,11 +138,11 @@ Remote state is configured in `infra/backend.tf`:
 
 `infra/providers.tf` sets:
 - AWS region from `var.aws_region`
-- AWS profile `dev`
+- AWS profile from `var.aws_profile`
 
-Default variable values in `infra/terraform.tfvars`:
+Variable defaults live in `infra/variables.tf` (no tfvars file is required):
 - `aws_region = "eu-north-1"`
-- `aws_profile = "dev"`
+- `aws_profile = "prod"`
 
 ## Current implementation notes
 
@@ -173,8 +173,9 @@ create them in this order:
 
 1. **Choose the Hosted UI domain prefix.** Default is `wine-tracker-auth`
    (`var.cognito_domain_prefix`), giving
-   `https://wine-tracker-auth.auth.eu-north-1.amazoncognito.com`. Override it in
-   `terraform.tfvars` if the prefix is already taken in the region.
+   `https://wine-tracker-auth.auth.eu-north-1.amazoncognito.com`. Override
+   `var.cognito_domain_prefix` (edit its default or pass `-var`) if the prefix
+   is already taken in the region.
 
 2. **Create a Google OAuth 2.0 client** in the
    [Google Cloud Console](https://console.cloud.google.com/apis/credentials) →
@@ -186,13 +187,23 @@ create them in this order:
      (this is also emitted as the `cognito_google_redirect_uri` Terraform output)
    - Copy the generated **Client ID** and **Client secret**.
 
-3. **Fill `infra/terraform.tfvars`** (gitignored — see
-   `infra/terraform.tfvars.example`):
-   ```hcl
-   google_client_id     = "xxxx.apps.googleusercontent.com"
-   google_client_secret = "GOCSPX-xxxx"
-   allowed_emails       = ["member1@gmail.com", "member2@gmail.com"]
+3. **Store the secrets in SSM Parameter Store** (once per account, in
+   `eu-north-1` — the same region/account the resources deploy to). These are
+   read at apply time by the data sources in `infra/cognito.tf`, so no secrets
+   ever land in a tfvars file or on any dev machine — any device with AWS
+   creds can apply. Standard-tier `SecureString` with the default `aws/ssm` KMS
+   key is $0:
+   ```bash
+   aws ssm put-parameter --region eu-north-1 --type SecureString \
+     --name /wine-tracker/google_client_id     --value "xxxx.apps.googleusercontent.com"
+   aws ssm put-parameter --region eu-north-1 --type SecureString \
+     --name /wine-tracker/google_client_secret --value "GOCSPX-xxxx"
+   aws ssm put-parameter --region eu-north-1 --type SecureString \
+     --name /wine-tracker/allowed_emails       --value '["member1@gmail.com","member2@gmail.com"]'
    ```
+   `allowed_emails` must be a JSON array string. Whoever runs `terraform apply`
+   needs `ssm:GetParameter` on `/wine-tracker/*` and `kms:Decrypt` on the
+   `aws/ssm` key (the default admin/prod role already has this).
 
 4. **Apply Terraform** (`terraform apply` from `infra/`). Note the outputs
    `cognito_authority`, `cognito_user_pool_client_id`, and
@@ -201,14 +212,20 @@ create them in this order:
 5. **Deploy the frontend.** CI (`.github/workflows/deploy.yml`) and
    `scripts/deploy-snapshot.sh` read those outputs automatically and pass them
    to the Vite build as `VITE_COGNITO_*`. No new GitHub secrets are needed — the
-   Cognito IDs are public; only the Google client secret is sensitive and it
-   lives solely in `terraform.tfvars` / Terraform state.
+   Cognito IDs are public; the Google client secret lives only in SSM and
+   Terraform state.
 
 ### Managing access
 
-Add or remove entries in `allowed_emails` and re-run `terraform apply`. Removing
-an email blocks future sign-ups; to revoke an already-registered user, also
-delete them from the User Pool (console or `aws cognito-idp admin-delete-user`).
+Update the `/wine-tracker/allowed_emails` SSM parameter (a JSON array) and re-run
+`terraform apply` — the Pre-Sign-Up Lambda's allowlist refreshes from it:
+```bash
+aws ssm put-parameter --region eu-north-1 --type SecureString --overwrite \
+  --name /wine-tracker/allowed_emails --value '["member1@gmail.com","member3@gmail.com"]'
+```
+Removing an email blocks future sign-ups; to revoke an already-registered user,
+also delete them from the User Pool (console or `aws cognito-idp
+admin-delete-user`).
 
 ### Local development
 
@@ -244,12 +261,17 @@ CloudFront supports custom domains, but requires an ACM certificate in `us-east-
 
 2. Validate the certificate using DNS records in Zone.ee.
 
-3. Configure Terraform variables (for example in `infra/terraform.tfvars`):
+3. Set the aliases via `var.cloudfront_aliases` (default `["wine.mandla.tech"]`
+   in `infra/variables.tf`; edit the default or pass `-var` for more):
 
 ```hcl
-cloudfront_aliases            = ["mandla.tech", "www.mandla.tech", "wine.mandla.tech"]
-cloudfront_acm_certificate_arn = "arn:aws:acm:us-east-1:565393049153:certificate/REPLACE_ME"
+cloudfront_aliases = ["mandla.tech", "www.mandla.tech", "wine.mandla.tech"]
 ```
+
+The certificate ARN is no longer configured — it's discovered automatically
+from ACM in `us-east-1` by domain (`data.aws_acm_certificate.cloudfront` in
+`website.tf`, currently matching `*.mandla.tech`). If you use a different base
+domain, update that `domain` filter to match your certificate.
 
 4. Apply infrastructure:
 

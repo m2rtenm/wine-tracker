@@ -1,3 +1,13 @@
+# CloudFront viewer certificate, discovered from ACM (us-east-1) by domain
+# instead of hardcoding the ARN. Only looked up when custom aliases are set.
+data "aws_acm_certificate" "cloudfront" {
+  count       = length(var.cloudfront_aliases) > 0 ? 1 : 0
+  provider    = aws.us_east_1
+  domain      = "*.mandla.tech"
+  statuses    = ["ISSUED"]
+  most_recent = true
+}
+
 resource "random_id" "website_suffix" {
   byte_length = 4
 }
@@ -112,7 +122,7 @@ resource "aws_cloudfront_distribution" "website_cdn" {
 
   viewer_certificate {
     cloudfront_default_certificate = length(var.cloudfront_aliases) == 0 ? true : false
-    acm_certificate_arn            = length(var.cloudfront_aliases) > 0 ? var.cloudfront_acm_certificate_arn : null
+    acm_certificate_arn            = length(var.cloudfront_aliases) > 0 ? data.aws_acm_certificate.cloudfront[0].arn : null
     ssl_support_method             = length(var.cloudfront_aliases) > 0 ? "sni-only" : null
     minimum_protocol_version       = length(var.cloudfront_aliases) > 0 ? "TLSv1.2_2021" : null
   }
