@@ -113,7 +113,10 @@ jobs:
           audience: sts.amazonaws.com
 
       - name: Install dependencies
-        run: npm ci
+        # --loglevel=error hides npm's deprecation warnings for transitive deps
+        # of exceljs (a dev-only XLSX import tool CI never runs) while still
+        # surfacing real install errors.
+        run: npm ci --loglevel=error
 
       - name: Export DynamoDB snapshot
         run: npm run export:data

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node --no-deprecation ./node_modules/.bin/vite",
-    "build": "vite build",
+    "build": "node --no-deprecation ./node_modules/.bin/vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "import:data": "node scripts/import-wines-from-xlsx.mjs",
