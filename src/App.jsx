@@ -14,11 +14,12 @@ function App() {
     .sort((a, b) => (b.wineId || '').localeCompare(a.wineId || ''));
   const API_BASE = '/api/wines';
 
-  const [wines, setWines] = useState(sortWines(mockWines));
+  const [wines, setWines] = useState([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingWine, setEditingWine] = useState(null);
-  const [dataSource, setDataSource] = useState('mock');
+  const [dataSource, setDataSource] = useState('loading');
   const [loadError, setLoadError] = useState('');
+  const [isDataLoading, setIsDataLoading] = useState(true);
 
   // Bearer token attached to every API request; validated by the API Gateway
   // JWT authorizer. Read fresh on each call so token refreshes are picked up.
@@ -45,6 +46,7 @@ function App() {
     let ignore = false;
 
     const loadData = async () => {
+      setIsDataLoading(true);
       try {
         const response = await fetch(API_BASE, { cache: 'no-store', headers: { ...authHeaders() } });
         const loaded = await readJsonOrThrow(response);
@@ -61,8 +63,12 @@ function App() {
         console.error('Failed to load wines from API:', error);
         if (ignore) return;
 
+        setWines(sortWines(mockWines));
         setDataSource('mock');
         setLoadError('Could not reach the API, showing sample data.');
+      } finally {
+        if (ignore) return;
+        setIsDataLoading(false);
       }
     };
 
@@ -217,6 +223,14 @@ function App() {
             Sign in with Google
           </button>
         </div>
+      </div>
+    );
+  }
+
+  if (isDataLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-100 text-sm text-slate-600">
+        Loading wines…
       </div>
     );
   }
