@@ -11,8 +11,7 @@
     "import:data": "node scripts/import-wines-from-xlsx.mjs",
     "reset:data": "node scripts/reset-wines-table.mjs",
     "extract:images": "/Users/martenmandla/git/wine-tracker/.venv/bin/python scripts/extract-xlsx-images.py",
-    "export:data": "node scripts/export-wines-from-dynamodb.mjs",
-    "deploy:snapshot": "bash scripts/deploy-snapshot.sh"
+    "deploy": "bash scripts/deploy.sh"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.0.0",

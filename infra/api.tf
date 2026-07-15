@@ -79,8 +79,24 @@ resource "aws_lambda_function" "wines_api" {
       TABLE_NAME       = aws_dynamodb_table.wine_tracker.name
       MEDIA_BUCKET     = aws_s3_bucket.media.id
       MEDIA_CDN_DOMAIN = aws_cloudfront_distribution.website_cdn.domain_name
+      ALLOWED_ORIGINS  = join(",", local.cors_allowed_origins)
+      MAX_UPLOAD_BYTES = tostring(var.max_upload_bytes)
     }
   }
+}
+
+# Allowed browser origins for the API. Derived from the CloudFront custom
+# aliases (the production app origin) plus any dev origins. We intentionally do
+# NOT reference the CloudFront distribution's domain here: the distribution
+# already depends on this API's endpoint, so referencing it back would create a
+# dependency cycle. When cloudfront_aliases is empty (serving on the default
+# CloudFront domain), set var.extra_cors_origins to that domain explicitly.
+locals {
+  cors_allowed_origins = distinct(concat(
+    [for alias in var.cloudfront_aliases : "https://${alias}"],
+    [for url in var.auth_extra_callback_urls : trimsuffix(url, "/")],
+    var.extra_cors_origins,
+  ))
 }
 
 resource "aws_apigatewayv2_api" "wines_api" {
@@ -88,9 +104,10 @@ resource "aws_apigatewayv2_api" "wines_api" {
   protocol_type = "HTTP"
 
   cors_configuration {
-    allow_origins = ["*"]
+    allow_origins = local.cors_allowed_origins
     allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-    allow_headers = ["content-type"]
+    allow_headers = ["content-type", "authorization"]
+    max_age       = 3600
   }
 }
 

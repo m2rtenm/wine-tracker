@@ -6,15 +6,11 @@ INFRA_DIR="$ROOT_DIR/infra"
 
 AWS_PROFILE="${AWS_PROFILE:-prod}"
 AWS_REGION="${AWS_REGION:-eu-north-1}"
-DDB_TABLE="${DDB_TABLE:-WineTracker}"
 
-echo "Using AWS_PROFILE=$AWS_PROFILE AWS_REGION=$AWS_REGION DDB_TABLE=$DDB_TABLE"
+echo "Using AWS_PROFILE=$AWS_PROFILE AWS_REGION=$AWS_REGION"
 
 WEBSITE_BUCKET="$(terraform -chdir="$INFRA_DIR" output -raw website_bucket_name)"
 CLOUDFRONT_DISTRIBUTION_ID="$(terraform -chdir="$INFRA_DIR" output -raw cloudfront_distribution_id)"
-
-echo "Exporting DynamoDB snapshot..."
-AWS_PROFILE="$AWS_PROFILE" AWS_REGION="$AWS_REGION" DDB_TABLE="$DDB_TABLE" npm --prefix "$ROOT_DIR" run export:data
 
 echo "Building frontend..."
 VITE_COGNITO_AUTHORITY="$(terraform -chdir="$INFRA_DIR" output -raw cognito_authority)" \

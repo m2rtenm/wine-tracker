@@ -47,15 +47,22 @@ The application uses soft-delete semantics:
 You can query all entries including deleted ones with:
 
 ```bash
-curl "https://<api-id>.execute-api.<region>.amazonaws.com/api/wines?includeDeleted=true"
+curl "https://<api-id>.execute-api.<region>.amazonaws.com/api/wines?includeDeleted=true" \
+  -H "Authorization: Bearer <access-token>"
 ```
 
 Then copy the `wineId` of the entry you want to restore.
 
+Every API route is gated by the Cognito JWT authorizer, so the `Authorization:
+Bearer <access-token>` header is **required** — requests without a valid token
+are rejected with `401`. Grab a token from the browser dev tools (the app stores
+it in `localStorage`) or the Cognito Hosted UI.
+
 ### Restore via API directly
 
 ```bash
-curl -X POST "https://<api-id>.execute-api.<region>.amazonaws.com/api/wines/<wineId>/restore"
+curl -X POST "https://<api-id>.execute-api.<region>.amazonaws.com/api/wines/<wineId>/restore" \
+  -H "Authorization: Bearer <access-token>"
 ```
 
 The response contains the restored item with `isDeleted = false` and `deletedAt = ""`.
@@ -146,16 +153,28 @@ Variable defaults live in `infra/variables.tf` (no tfvars file is required):
 
 ## Current implementation notes
 
-- The app currently sources wine entries from `src/mockWines.json`.
-- Add/edit/delete state is managed in-memory in `src/App.jsx`.
-- `src/components/AddWineForm.jsx` includes direct browser-side use of `S3Client`, `PutObjectCommand`, `DynamoDBClient`, and `PutItemCommand`.
-- The application is not yet wired to read wine entries from DynamoDB on initial load.
+- On load, the app reads wine entries from the authenticated API
+  (`GET /api/wines`), attaching the Cognito access token as a bearer.
+- If the API is unreachable, the app falls back to the bundled sample data in
+  `src/mockWines.json` (read-only). There is **no** public data snapshot — the
+  wine collection is never served as a static file.
+- Add/edit/delete/restore all go through the API (`src/App.jsx`), which writes
+  to DynamoDB and S3 from the Lambda. The browser never talks to AWS SDKs or
+  holds AWS credentials directly.
+- Image uploads are sent to the API as base64 and validated server-side
+  (content-type allowlist + size cap, `var.max_upload_bytes`) before landing in
+  the media bucket under `uploads/<wineId>/`.
 
 ## Important caveats
 
-- Direct AWS SDK use in the browser is not secure for production.
-- The current code uses static bucket and table names and would need a backend or signed upload flow for safe deployment.
-- Terraform backend and provider profiles differ (`sec` vs `dev`), so AWS profiles must be configured accordingly.
+- All data access goes through the Cognito-gated API; the browser holds no AWS
+  credentials and the collection is not exposed as a public file.
+- API responses are CORS-restricted to the app's own origins (the CloudFront
+  aliases plus configured dev origins), not `*`.
+- CloudFront serves the app with HSTS, a Content-Security-Policy, and related
+  security headers via a response-headers policy (`infra/website.tf`).
+- Terraform backend and deployment profiles differ (`sec` vs `prod`), so AWS
+  profiles must be configured accordingly.
 
 ## Authentication (Cognito + Google)
 
@@ -210,7 +229,7 @@ create them in this order:
    `cognito_hosted_ui_domain`.
 
 5. **Deploy the frontend.** CI (`.github/workflows/deploy.yml`) and
-   `scripts/deploy-snapshot.sh` read those outputs automatically and pass them
+   `scripts/deploy.sh` read those outputs automatically and pass them
    to the Vite build as `VITE_COGNITO_*`. No new GitHub secrets are needed — the
    Cognito IDs are public; the Google client secret lives only in SSM and
    Terraform state.
@@ -305,7 +324,7 @@ The workflow uses GitHub OIDC + role assumption (not long-lived access keys).
 To use it, add these repository secrets in GitHub:
 
 - `AWS_STATE_ROLE_ARN` — IAM role ARN in the `sec` account (Terraform backend/state access)
-- `AWS_DEPLOY_ROLE_ARN` — IAM role ARN in the `prod` account (DynamoDB export + S3 deploy + CloudFront invalidation)
+- `AWS_DEPLOY_ROLE_ARN` — IAM role ARN in the `prod` account (S3 deploy + CloudFront invalidation)
 
 Each AWS account that hosts one of these roles must have an IAM OpenID Connect provider configured for GitHub Actions:
 
@@ -343,7 +362,7 @@ The workflow reads the target website bucket and CloudFront distribution ID dire
 
 Terraform behavior in CI/CD:
 
-- The pipeline runs `terraform init` so it can read Terraform outputs (`website_bucket_name`, `cloudfront_distribution_id`, `dynamodb_table_name`) before deployment.
+- The pipeline runs `terraform init` so it can read Terraform outputs (`website_bucket_name`, `cloudfront_distribution_id`, and the `cognito_*` values) before deployment.
 - Infrastructure changes are not applied automatically in CI.
 - The workflow ends with a reminder to run Terraform manually for infra changes.
 

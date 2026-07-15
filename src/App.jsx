@@ -58,28 +58,11 @@ function App() {
         setDataSource('live api');
         setLoadError('');
       } catch (error) {
-        console.error('Failed to load wines from API, trying snapshot fallback:', error);
+        console.error('Failed to load wines from API:', error);
         if (ignore) return;
 
-        try {
-          const snapshotResponse = await fetch('/data/wines.json', { cache: 'no-store' });
-          if (!snapshotResponse.ok) {
-            throw new Error(`Failed to fetch snapshot (${snapshotResponse.status})`, { cause: error });
-          }
-
-          const snapshot = await snapshotResponse.json();
-          if (!Array.isArray(snapshot)) {
-            throw new Error('Snapshot response was not an array', { cause: error });
-          }
-
-          setWines(sortWines(snapshot));
-          setDataSource('deployed snapshot');
-          setLoadError('Live API is unavailable, showing deployed snapshot data.');
-        } catch (snapshotError) {
-          console.error('Failed to load snapshot fallback:', snapshotError);
-          setDataSource('mock');
-          setLoadError('Could not read live API or snapshot, showing sample data.');
-        }
+        setDataSource('mock');
+        setLoadError('Could not reach the API, showing sample data.');
       }
     };
 
@@ -248,7 +231,7 @@ function App() {
               <h1 className="mt-2 text-3xl font-semibold text-slate-900">Tasting Dashboard</h1>
               <p className="mt-2 max-w-2xl text-sm text-slate-600">Review tasting metrics, manage your collection, and upload new entries with the form.</p>
               <p className="mt-2 text-xs text-slate-500">
-                Data source: {dataSource === 'live api' ? 'Live API' : dataSource === 'deployed snapshot' ? 'Deployed data snapshot' : 'Sample data'}
+                Data source: {dataSource === 'live api' ? 'Live API' : 'Sample data'}
               </p>
               {loadError && <p className="mt-1 text-xs text-amber-700">{loadError}</p>}
             </div>

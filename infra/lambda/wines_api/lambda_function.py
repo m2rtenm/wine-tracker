@@ -10,9 +10,29 @@ from botocore.exceptions import ClientError
 TABLE_NAME = os.environ["TABLE_NAME"]
 MEDIA_BUCKET = os.environ["MEDIA_BUCKET"]
 MEDIA_CDN_DOMAIN = os.environ["MEDIA_CDN_DOMAIN"]
+# Comma-separated list of browser origins allowed to read CORS responses.
+ALLOWED_ORIGINS = {
+    origin.strip()
+    for origin in os.environ.get("ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+}
+
+# Reject oversized image uploads before decoding them into memory / S3.
+MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(8 * 1024 * 1024)))
+ALLOWED_IMAGE_CONTENT_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/heic",
+}
 
 TABLE = boto3.resource("dynamodb").Table(TABLE_NAME)
 S3 = boto3.client("s3")
+
+
+class UploadError(Exception):
+    """Raised when an image upload fails validation."""
 
 
 class DecimalEncoder(json.JSONEncoder):
@@ -24,15 +44,24 @@ class DecimalEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
-def response(status_code, body):
+def cors_headers(origin):
+    headers = {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Headers": "Content-Type,Authorization",
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+        "Vary": "Origin",
+    }
+    # Only reflect the caller's origin when it is on the allowlist. If no
+    # allowlist is configured, omit the header entirely rather than sending "*".
+    if origin and origin in ALLOWED_ORIGINS:
+        headers["Access-Control-Allow-Origin"] = origin
+    return headers
+
+
+def response(status_code, body, origin=None):
     return {
         "statusCode": status_code,
-        "headers": {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Content-Type",
-            "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-        },
+        "headers": cors_headers(origin),
         "body": json.dumps(body, cls=DecimalEncoder),
     }
 
@@ -79,8 +108,27 @@ def put_image_if_present(payload, wine_id):
     if not data_base64:
         return payload.get("imageUrl", "")
 
-    blob = base64.b64decode(data_base64)
-    object_key = f"uploads/{wine_id}/{file_name}"
+    if content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
+        raise UploadError(f"Unsupported image type: {content_type}")
+
+    # A base64 string of length N decodes to roughly N * 3/4 bytes. Check the
+    # encoded length first so we reject oversized payloads before decoding them
+    # into memory.
+    approx_bytes = (len(data_base64) * 3) // 4
+    if approx_bytes > MAX_UPLOAD_BYTES:
+        raise UploadError("Image is too large")
+
+    try:
+        blob = base64.b64decode(data_base64, validate=True)
+    except (base64.binascii.Error, ValueError) as exc:
+        raise UploadError("Image data is not valid base64") from exc
+
+    if len(blob) > MAX_UPLOAD_BYTES:
+        raise UploadError("Image is too large")
+
+    # Never let a client-supplied file name escape the wine's upload prefix.
+    safe_file_name = os.path.basename(file_name) or "image.jpg"
+    object_key = f"uploads/{wine_id}/{safe_file_name}"
 
     S3.put_object(
         Bucket=MEDIA_BUCKET,
@@ -90,6 +138,12 @@ def put_image_if_present(payload, wine_id):
     )
 
     return f"https://{MEDIA_CDN_DOMAIN}/{object_key}"
+
+
+def resolve_origin(event):
+    headers = event.get("headers") or {}
+    # HTTP API lower-cases header names, but be defensive.
+    return headers.get("origin") or headers.get("Origin")
 
 
 def normalize_item(payload, wine_id):
@@ -152,39 +206,49 @@ def delete_images_for_wine(wine_id):
 def handler(event, _context):
     method = event.get("requestContext", {}).get("http", {}).get("method", "")
     raw_path = event.get("rawPath", "")
+    origin = resolve_origin(event)
+
+    def reply(status_code, body):
+        return response(status_code, body, origin)
 
     if method == "OPTIONS":
-        return response(200, {"ok": True})
+        return reply(200, {"ok": True})
 
     if method == "GET" and raw_path == "/api/wines":
         include_deleted_raw = (event.get("queryStringParameters") or {}).get("includeDeleted", "")
         include_deleted = str(include_deleted_raw).lower() in {"1", "true", "yes"}
-        return response(200, scan_all_items(include_deleted=include_deleted))
+        return reply(200, scan_all_items(include_deleted=include_deleted))
 
     if method == "POST" and raw_path == "/api/wines":
         payload = parse_body(event)
         wine_id = payload.get("wineId")
         if not wine_id:
-            return response(400, {"message": "wineId is required"})
+            return reply(400, {"message": "wineId is required"})
 
-        item = normalize_item(payload, wine_id)
+        try:
+            item = normalize_item(payload, wine_id)
+        except UploadError as exc:
+            return reply(400, {"message": str(exc)})
         TABLE.put_item(Item=item)
-        return response(200, item)
+        return reply(200, item)
 
     if method == "PUT" and raw_path.startswith("/api/wines/"):
         payload = parse_body(event)
         wine_id = event.get("pathParameters", {}).get("wineId")
         if not wine_id:
-            return response(400, {"message": "wineId path parameter is required"})
+            return reply(400, {"message": "wineId path parameter is required"})
 
-        item = normalize_item(payload, wine_id)
+        try:
+            item = normalize_item(payload, wine_id)
+        except UploadError as exc:
+            return reply(400, {"message": str(exc)})
         TABLE.put_item(Item=item)
-        return response(200, item)
+        return reply(200, item)
 
     if method == "DELETE" and raw_path.startswith("/api/wines/"):
         wine_id = event.get("pathParameters", {}).get("wineId")
         if not wine_id:
-            return response(400, {"message": "wineId path parameter is required"})
+            return reply(400, {"message": "wineId path parameter is required"})
 
         deleted_at = datetime.now(timezone.utc).isoformat()
         try:
@@ -200,7 +264,7 @@ def handler(event, _context):
             )
         except ClientError as exc:
             if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-                return response(404, {
+                return reply(404, {
                     "message": "Wine not found",
                     "wineId": wine_id,
                 })
@@ -208,12 +272,12 @@ def handler(event, _context):
 
         attributes = updated.get("Attributes")
         if not attributes:
-            return response(404, {
+            return reply(404, {
                 "message": "Wine not found",
                 "wineId": wine_id,
             })
 
-        return response(200, {
+        return reply(200, {
             "deleted": True,
             "wineId": wine_id,
             "item": attributes,
@@ -222,7 +286,7 @@ def handler(event, _context):
     if method == "POST" and raw_path.startswith("/api/wines/") and raw_path.endswith("/restore"):
         wine_id = event.get("pathParameters", {}).get("wineId")
         if not wine_id:
-            return response(400, {"message": "wineId path parameter is required"})
+            return reply(400, {"message": "wineId path parameter is required"})
 
         try:
             updated = TABLE.update_item(
@@ -237,7 +301,7 @@ def handler(event, _context):
             )
         except ClientError as exc:
             if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-                return response(404, {
+                return reply(404, {
                     "message": "Wine not found",
                     "wineId": wine_id,
                 })
@@ -245,11 +309,11 @@ def handler(event, _context):
 
         attributes = updated.get("Attributes")
         if not attributes:
-            return response(404, {
+            return reply(404, {
                 "message": "Wine not found",
                 "wineId": wine_id,
             })
 
-        return response(200, attributes)
+        return reply(200, attributes)
 
-    return response(404, {"message": f"No route for {method} {raw_path}"})
+    return reply(404, {"message": f"No route for {method} {raw_path}"})

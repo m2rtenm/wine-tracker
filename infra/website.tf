@@ -34,6 +34,70 @@ resource "aws_s3_bucket_website_configuration" "website" {
   }
 }
 
+# Security response headers applied to the app (HTML/JS/CSS) delivered by
+# CloudFront. connect-src must allow the Cognito endpoints the SPA talks to:
+# the JWKS/discovery host (cognito-idp) and the Hosted UI domain (token
+# exchange). img-src uses `https:` rather than naming the distribution's own
+# domain, because referencing it here would create a dependency cycle (the
+# distribution references this policy).
+locals {
+  cognito_hosted_ui_origin = "https://${aws_cognito_user_pool_domain.wine.domain}.auth.${var.aws_region}.amazoncognito.com"
+  cognito_idp_origin       = "https://cognito-idp.${var.aws_region}.amazonaws.com"
+
+  content_security_policy = join("; ", [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https:",
+    "font-src 'self' data:",
+    "connect-src 'self' ${local.cognito_idp_origin} ${local.cognito_hosted_ui_origin}",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "form-action 'self'",
+  ])
+}
+
+resource "aws_cloudfront_response_headers_policy" "security_headers" {
+  name = "wine-tracker-security-headers"
+
+  security_headers_config {
+    content_security_policy {
+      content_security_policy = local.content_security_policy
+      override                = true
+    }
+
+    strict_transport_security {
+      access_control_max_age_sec = 63072000
+      include_subdomains         = true
+      preload                    = true
+      override                   = true
+    }
+
+    content_type_options {
+      override = true
+    }
+
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+  }
+
+  custom_headers_config {
+    items {
+      header   = "Permissions-Policy"
+      value    = "geolocation=(), camera=(), microphone=(), interest-cohort=()"
+      override = true
+    }
+  }
+}
+
 resource "aws_cloudfront_origin_access_control" "oac" {
   name        = "wine-tracker-oac"
   description = "Origin Access Control for WineTracker S3 website"
@@ -107,10 +171,11 @@ resource "aws_cloudfront_distribution" "website_cdn" {
   }
 
   default_cache_behavior {
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD"]
-    target_origin_id       = "WineTrackerWebsiteOrigin"
-    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD"]
+    target_origin_id           = "WineTrackerWebsiteOrigin"
+    viewer_protocol_policy     = "redirect-to-https"
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security_headers.id
 
     forwarded_values {
       query_string = false

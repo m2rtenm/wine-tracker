@@ -34,3 +34,15 @@ variable "auth_extra_callback_urls" {
   type        = list(string)
   default     = ["http://localhost:5173/"]
 }
+
+variable "extra_cors_origins" {
+  description = "Additional browser origins allowed to call the API (no trailing slash). Use when serving on the default CloudFront domain (cloudfront_aliases = []) — set this to https://<distribution>.cloudfront.net. The custom aliases and dev callback origins are allowed automatically."
+  type        = list(string)
+  default     = []
+}
+
+variable "max_upload_bytes" {
+  description = "Maximum size (in bytes) of an image upload accepted by the API. Note that API Gateway HTTP APIs cap the whole request payload at ~10 MB; base64 encoding inflates the image by ~33%."
+  type        = number
+  default     = 8388608 # 8 MiB
+}

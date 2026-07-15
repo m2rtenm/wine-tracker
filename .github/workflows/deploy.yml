@@ -91,14 +91,12 @@ jobs:
         run: |
           WEBSITE_BUCKET=$(terraform output -raw website_bucket_name)
           CLOUDFRONT_DISTRIBUTION_ID=$(terraform output -raw cloudfront_distribution_id)
-          DDB_TABLE=$(terraform output -raw dynamodb_table_name)
           COGNITO_AUTHORITY=$(terraform output -raw cognito_authority)
           COGNITO_CLIENT_ID=$(terraform output -raw cognito_user_pool_client_id)
           COGNITO_HOSTED_UI=$(terraform output -raw cognito_hosted_ui_domain)
           {
             echo "WEBSITE_BUCKET=${WEBSITE_BUCKET}"
             echo "CLOUDFRONT_DISTRIBUTION_ID=${CLOUDFRONT_DISTRIBUTION_ID}"
-            echo "DDB_TABLE=${DDB_TABLE}"
             echo "COGNITO_AUTHORITY=${COGNITO_AUTHORITY}"
             echo "COGNITO_CLIENT_ID=${COGNITO_CLIENT_ID}"
             echo "COGNITO_HOSTED_UI=${COGNITO_HOSTED_UI}"
@@ -117,12 +115,6 @@ jobs:
         # of exceljs (a dev-only XLSX import tool CI never runs) while still
         # surfacing real install errors.
         run: npm ci --loglevel=error
-
-      - name: Export DynamoDB snapshot
-        run: npm run export:data
-        env:
-          AWS_REGION: eu-north-1
-          DDB_TABLE: ${{ steps.tf_outputs.outputs.DDB_TABLE }}
 
       - name: Build production bundle
         run: npm run build
