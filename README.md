@@ -26,6 +26,26 @@ Key components:
 - View bottle images in a modal.
 - Display tasting metrics.
 - Soft-delete entries and restore them later.
+- Install as a Progressive Web App (PWA) on Android and iOS.
+
+## Progressive Web App (PWA)
+
+The frontend is configured as a PWA using `vite-plugin-pwa`:
+
+- production builds generate a Web App Manifest and Service Worker automatically
+- static app assets are cached for faster repeat visits and offline shell loading
+- install metadata/icons are included for Android and iOS home screen install
+
+To test installability locally:
+
+```bash
+npm run build
+npm run preview
+```
+
+Then open the preview URL on your phone and use:
+- **Android (Chrome):** browser menu → **Install app**
+- **iOS (Safari):** share sheet → **Add to Home Screen**
 
 ## Soft Delete And Restore
 
