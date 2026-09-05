@@ -6,7 +6,9 @@ const CLOSURE_PRESETS = ['Screw cap', 'Cork'];
 const DRINK_TYPE_PRESETS = ['Wine'];
 const MAX_IMAGE_UPLOAD_BYTES = 2 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 1920;
-const JPEG_QUALITY_STEPS = [0.85, 0.75, 0.65, 0.55, 0.45];
+const MIN_IMAGE_DIMENSION = 480;
+const JPEG_QUALITY_STEPS = [0.85, 0.75, 0.65, 0.55, 0.45, 0.35];
+const IMAGE_EXTENSION_PATTERN = /\.(jpe?g|png|gif|webp|bmp|heic|heif|avif)$/i;
 // Tasting dates are the Estonian calendar date, independent of the device's
 // timezone, so a member abroad still records the local club date.
 const APP_TIME_ZONE = 'Europe/Tallinn';
@@ -34,22 +36,52 @@ const readFileAsDataUrl = fileOrBlob => new Promise((resolve, reject) => {
   reader.readAsDataURL(fileOrBlob);
 });
 
-const loadImageFromFile = file => new Promise((resolve, reject) => {
-  const image = new Image();
-  const objectUrl = URL.createObjectURL(file);
+// Some Android "content picker" file sources report an empty or generic
+// MIME type (e.g. application/octet-stream) even for real photos, so we
+// can't rely on `file.type` alone to decide whether an image can be
+// compressed. Fall back to sniffing the file extension too.
+const looksLikeImageFile = file => {
+  if (file?.type?.startsWith('image/')) return true;
+  if (file?.type) return false;
+  return IMAGE_EXTENSION_PATTERN.test(file?.name || '');
+};
 
-  image.onload = () => {
-    URL.revokeObjectURL(objectUrl);
-    resolve(image);
-  };
+// Prefer createImageBitmap: it decodes off the main thread, handles EXIF
+// orientation automatically, and is far more memory-robust than an <img>
+// element for the very large (12MP+) photos common on Android cameras.
+// Fall back to the <img>/objectURL approach for browsers without it.
+const loadImageSource = async file => {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+      return { source: bitmap, width: bitmap.width, height: bitmap.height, close: () => bitmap.close() };
+    } catch {
+      try {
+        const bitmap = await createImageBitmap(file);
+        return { source: bitmap, width: bitmap.width, height: bitmap.height, close: () => bitmap.close() };
+      } catch {
+        // Fall through to the <img> based decode below.
+      }
+    }
+  }
 
-  image.onerror = () => {
-    URL.revokeObjectURL(objectUrl);
-    reject(new Error('Failed to load selected image file.'));
-  };
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
 
-  image.src = objectUrl;
-});
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve({ source: image, width: image.naturalWidth || image.width, height: image.naturalHeight || image.height, close: () => {} });
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Failed to load selected image file.'));
+    };
+
+    image.src = objectUrl;
+  });
+};
 
 const canvasToBlob = (canvas, quality) => new Promise(resolve => {
   canvas.toBlob(blob => resolve(blob), 'image/jpeg', quality);
@@ -61,7 +93,7 @@ const ensureJpegFileName = originalName => {
 };
 
 const toUploadPayload = async selectedFile => {
-  if (!selectedFile?.type?.startsWith('image/')) {
+  if (!looksLikeImageFile(selectedFile)) {
     const dataBase64 = await readFileAsDataUrl(selectedFile);
     return {
       fileName: selectedFile.name,
@@ -71,59 +103,17 @@ const toUploadPayload = async selectedFile => {
     };
   }
 
-  let image;
+  let decoded;
   try {
-    image = await loadImageFromFile(selectedFile);
+    decoded = await loadImageSource(selectedFile);
   } catch {
-    const dataBase64 = await readFileAsDataUrl(selectedFile);
-    return {
-      fileName: selectedFile.name,
-      contentType: selectedFile.type || 'application/octet-stream',
-      dataBase64,
-      optimizedBytes: selectedFile.size,
-    };
-  }
-
-  const baseScale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(image.width, image.height));
-  let scaleMultiplier = 1;
-  let bestBlob = null;
-
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const width = Math.max(1, Math.round(image.width * baseScale * scaleMultiplier));
-    const height = Math.max(1, Math.round(image.height * baseScale * scaleMultiplier));
-
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-
-    const context = canvas.getContext('2d');
-    if (!context) break;
-
-    context.drawImage(image, 0, 0, width, height);
-
-    for (const quality of JPEG_QUALITY_STEPS) {
-      const blob = await canvasToBlob(canvas, quality);
-      if (!blob) continue;
-
-      if (!bestBlob || blob.size < bestBlob.size) {
-        bestBlob = blob;
-      }
-
-      if (blob.size <= MAX_IMAGE_UPLOAD_BYTES) {
-        const dataBase64 = await readFileAsDataUrl(blob);
-        return {
-          fileName: ensureJpegFileName(selectedFile.name),
-          contentType: 'image/jpeg',
-          dataBase64,
-          optimizedBytes: blob.size,
-        };
-      }
+    // The file couldn't be decoded as an image at all (unsupported codec,
+    // corrupt data, etc). Uploading the untouched original would still hit
+    // the 413 limit for large photos, so surface a clear, actionable error
+    // instead of silently forwarding a file that is guaranteed to fail.
+    if (selectedFile.size > MAX_IMAGE_UPLOAD_BYTES) {
+      throw new Error('Could not process this image on your device. Please try a different photo or a smaller image.');
     }
-
-    scaleMultiplier *= 0.85;
-  }
-
-  if (!bestBlob) {
     const dataBase64 = await readFileAsDataUrl(selectedFile);
     return {
       fileName: selectedFile.name,
@@ -133,13 +123,72 @@ const toUploadPayload = async selectedFile => {
     };
   }
 
-  const dataBase64 = await readFileAsDataUrl(bestBlob);
-  return {
-    fileName: ensureJpegFileName(selectedFile.name),
-    contentType: 'image/jpeg',
-    dataBase64,
-    optimizedBytes: bestBlob.size,
-  };
+  {
+    const { source, width: sourceWidth, height: sourceHeight, close } = decoded;
+    try {
+      const baseScale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(sourceWidth, sourceHeight));
+      let scaleMultiplier = 1;
+      let bestBlob = null;
+
+      // Keep shrinking (dimensions, then quality) until the result fits
+      // under the upload limit or we hit a sane minimum dimension floor.
+      // This guarantees convergence instead of giving up after a fixed
+      // number of attempts and uploading an oversized image anyway.
+      while (true) {
+        const width = Math.max(1, Math.round(sourceWidth * baseScale * scaleMultiplier));
+        const height = Math.max(1, Math.round(sourceHeight * baseScale * scaleMultiplier));
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const context = canvas.getContext('2d');
+        if (!context) break;
+
+        context.drawImage(source, 0, 0, width, height);
+
+        for (const quality of JPEG_QUALITY_STEPS) {
+          const blob = await canvasToBlob(canvas, quality);
+          if (!blob) continue;
+
+          if (!bestBlob || blob.size < bestBlob.size) {
+            bestBlob = blob;
+          }
+
+          if (blob.size <= MAX_IMAGE_UPLOAD_BYTES) {
+            const dataBase64 = await readFileAsDataUrl(blob);
+            return {
+              fileName: ensureJpegFileName(selectedFile.name),
+              contentType: 'image/jpeg',
+              dataBase64,
+              optimizedBytes: blob.size,
+            };
+          }
+        }
+
+        if (Math.min(width, height) <= MIN_IMAGE_DIMENSION) break;
+        scaleMultiplier *= 0.85;
+      }
+
+      if (!bestBlob) {
+        throw new Error('Could not compress this image on your device. Please try a different photo.');
+      }
+
+      if (bestBlob.size > MAX_IMAGE_UPLOAD_BYTES) {
+        throw new Error('Image is too large even after compression. Please use a smaller image and try again.');
+      }
+
+      const dataBase64 = await readFileAsDataUrl(bestBlob);
+      return {
+        fileName: ensureJpegFileName(selectedFile.name),
+        contentType: 'image/jpeg',
+        dataBase64,
+        optimizedBytes: bestBlob.size,
+      };
+    } finally {
+      close();
+    }
+  }
 };
 
 const toInitialClosureFields = value => {
