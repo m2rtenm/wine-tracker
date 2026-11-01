@@ -6,6 +6,7 @@ import {
   flexRender,
 } from '@tanstack/react-table';
 import { getCountryFlag } from '../data/countries';
+import AuthenticatedImage from './AuthenticatedImage';
 
 const PAGE_SIZE = 30;
 
@@ -99,7 +100,7 @@ export default function WineTable({ wines = [], onEdit, onDelete, onRestoreDelet
               onClick={() => openImageModal(imageUrl)}
               className="h-12 w-12 overflow-hidden rounded-lg border border-slate-200 transition hover:border-indigo-500 hover:shadow-md"
             >
-              <img src={imageUrl} alt="Wine bottle" className="h-full w-full object-cover" />
+              <AuthenticatedImage src={imageUrl} alt="Wine bottle" className="h-full w-full object-cover" />
             </button>
           ) : (
             <span className="text-slate-400">-</span>
@@ -449,7 +450,7 @@ export default function WineTable({ wines = [], onEdit, onDelete, onRestoreDelet
               </svg>
             </button>
             <div className="flex flex-1 items-center justify-center overflow-auto p-4">
-              <img src={selectedImage} alt="Wine bottle" className="max-h-full max-w-full object-contain" />
+              <AuthenticatedImage src={selectedImage} alt="Wine bottle" className="max-h-full max-w-full object-contain" />
             </div>
           </div>
         </div>
@@ -473,7 +474,7 @@ export default function WineTable({ wines = [], onEdit, onDelete, onRestoreDelet
             </div>
             <div className="px-6 py-5 space-y-4">
               {detailWine.imageUrl && (
-                <img src={detailWine.imageUrl} alt="Wine bottle" className="mx-auto h-48 w-auto object-contain rounded-2xl border border-slate-100" />
+                <AuthenticatedImage src={detailWine.imageUrl} alt="Wine bottle" className="mx-auto h-48 w-auto object-contain rounded-2xl border border-slate-100" />
               )}
               <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                 <dt className="font-medium text-slate-500">Tasted</dt>
@@ -533,4 +534,3 @@ export default function WineTable({ wines = [], onEdit, onDelete, onRestoreDelet
     </div>
   );
 }
-

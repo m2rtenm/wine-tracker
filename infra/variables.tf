@@ -46,3 +46,32 @@ variable "max_upload_bytes" {
   type        = number
   default     = 8388608 # 8 MiB
 }
+
+variable "api_throttling_rate_limit" {
+  description = "Maximum average requests per second for the Wine Tracker API stage."
+  type        = number
+  default     = 10
+}
+
+variable "api_throttling_burst_limit" {
+  description = "Maximum short API request burst before API Gateway throttles."
+  type        = number
+  default     = 20
+}
+
+variable "wines_api_reserved_concurrency" {
+  description = "Maximum concurrent executions of the Wine Tracker API Lambda, limiting concurrency-driven cost."
+  type        = number
+  default     = 10
+}
+
+variable "monthly_cost_limit_usd" {
+  description = "Monthly Wine Tracker cost threshold that disables API Lambda execution until the next month."
+  type        = number
+  default     = 1
+}
+
+variable "billing_alert_email" {
+  description = "Email address subscribed to Wine Tracker monthly budget alerts."
+  type        = string
+}

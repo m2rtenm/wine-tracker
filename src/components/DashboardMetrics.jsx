@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { getCountryFlag } from '../data/countries';
+import AuthenticatedImage from './AuthenticatedImage';
 
 const REQUIRED_TASTER_COUNT = 5;
 
@@ -100,7 +101,7 @@ export default function DashboardMetrics({ wines = [], onEdit }) {
                     className="block w-full"
                   >
                     {wine.imageUrl ? (
-                      <img src={wine.imageUrl} alt={wine.wineName || 'Wine bottle'} className="h-28 w-full object-cover sm:h-44" />
+                      <AuthenticatedImage src={wine.imageUrl} alt={wine.wineName || 'Wine bottle'} className="h-28 w-full object-cover sm:h-44" />
                     ) : (
                       <div className="flex h-28 w-full items-center justify-center bg-slate-200 text-xs font-medium text-slate-500 sm:h-44 sm:text-sm">
                         No image
@@ -136,7 +137,7 @@ export default function DashboardMetrics({ wines = [], onEdit }) {
             </div>
             <div className="space-y-4 px-6 py-5">
               {detailWine.imageUrl && (
-                <img src={detailWine.imageUrl} alt="Wine bottle" className="mx-auto h-48 w-auto rounded-2xl border border-slate-100 object-contain" />
+                <AuthenticatedImage src={detailWine.imageUrl} alt="Wine bottle" className="mx-auto h-48 w-auto rounded-2xl border border-slate-100 object-contain" />
               )}
               <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                 <dt className="font-medium text-slate-500">Tasted</dt>

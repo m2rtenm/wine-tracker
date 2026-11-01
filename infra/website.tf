@@ -48,9 +48,9 @@ locals {
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: https:",
+    "img-src 'self' blob: data: https:",
     "font-src 'self' data:",
-    "connect-src 'self' ${local.cognito_idp_origin} ${local.cognito_hosted_ui_origin}",
+    "connect-src 'self' ${local.cognito_idp_origin} ${local.cognito_hosted_ui_origin} https://${aws_s3_bucket.media.bucket_regional_domain_name}",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "object-src 'none'",
@@ -122,12 +122,6 @@ resource "aws_cloudfront_distribution" "website_cdn" {
   }
 
   origin {
-    domain_name              = aws_s3_bucket.media.bucket_regional_domain_name
-    origin_id                = "WineTrackerMediaOrigin"
-    origin_access_control_id = aws_cloudfront_origin_access_control.oac.id
-  }
-
-  origin {
     domain_name = replace(aws_apigatewayv2_api.wines_api.api_endpoint, "https://", "")
     origin_id   = "WineTrackerApiOrigin"
 
@@ -136,21 +130,6 @@ resource "aws_cloudfront_distribution" "website_cdn" {
       https_port             = 443
       origin_protocol_policy = "https-only"
       origin_ssl_protocols   = ["TLSv1.2"]
-    }
-  }
-
-  ordered_cache_behavior {
-    path_pattern           = "uploads/*"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD"]
-    target_origin_id       = "WineTrackerMediaOrigin"
-    viewer_protocol_policy = "redirect-to-https"
-
-    forwarded_values {
-      query_string = false
-      cookies {
-        forward = "none"
-      }
     }
   }
 

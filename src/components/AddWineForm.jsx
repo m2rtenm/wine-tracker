@@ -432,6 +432,8 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
         closureType: normalizedClosureType,
         vol: Number(formState.vol) || 0,
         imageUrl: initialWine?.imageUrl ?? '',
+        imageKey: initialWine?.imageKey ?? '',
+        imageContentType: initialWine?.imageContentType ?? '',
         comment: formState.comment,
         groupAverage,
         memberRatings,

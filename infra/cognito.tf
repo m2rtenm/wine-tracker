@@ -33,7 +33,7 @@ data "aws_ssm_parameter" "allowed_emails" {
 }
 
 # ---------------------------------------------------------------------------
-# Pre-Sign-Up Lambda: enforces the email allowlist for federated sign-ups.
+# Pre-Sign-Up Lambda: permits only verified allowlisted federated sign-ups.
 # ---------------------------------------------------------------------------
 data "archive_file" "pre_signup_zip" {
   type        = "zip"
@@ -191,7 +191,8 @@ resource "aws_cognito_user_pool_client" "web" {
     refresh_token = "days"
   }
 
-  explicit_auth_flows = ["ALLOW_REFRESH_TOKEN_AUTH", "ALLOW_USER_SRP_AUTH"]
+  # Password/SRP auth is unused; the app signs in only through Google OAuth.
+  explicit_auth_flows = ["ALLOW_REFRESH_TOKEN_AUTH"]
 
   depends_on = [aws_cognito_identity_provider.google]
 }

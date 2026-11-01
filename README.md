@@ -183,7 +183,9 @@ Variable defaults live in `infra/variables.tf` (no tfvars file is required):
   holds AWS credentials directly.
 - Image uploads are sent to the API as base64 and validated server-side
   (content-type allowlist + size cap, `var.max_upload_bytes`) before landing in
-  the media bucket under `uploads/<wineId>/`.
+  the private media bucket under `uploads/<wineId>/`. Images are returned via
+  an authenticated API route that issues a 60-second S3 URL; CloudFront no
+  longer serves the media bucket.
 
 ## Important caveats
 
@@ -191,6 +193,13 @@ Variable defaults live in `infra/variables.tf` (no tfvars file is required):
   credentials and the collection is not exposed as a public file.
 - API responses are CORS-restricted to the app's own origins (the CloudFront
   aliases plus configured dev origins), not `*`.
+- API Gateway throttles requests (default 10 requests/second, burst 20) and
+  the API Lambda is capped at 10 concurrent executions. These reduce abuse-driven
+  spend. An app-tagged $1 monthly AWS Budget emails the configured contact and
+  disables API Lambda execution after the threshold is reported; a monthly
+  schedule restores it at the next month boundary.
+- AWS cost reporting is delayed and budget shutdown does not stop CloudFront
+  delivery or S3 storage charges. It is not a guarantee of a $0 bill.
 - CloudFront serves the app with HSTS, a Content-Security-Policy, and related
   security headers via a response-headers policy (`infra/website.tf`).
 - Terraform backend and deployment profiles differ (`sec` vs `prod`), so AWS
@@ -203,7 +212,9 @@ Pool. The SPA runs the Authorization Code + PKCE flow via the Cognito Hosted UI
 (which redirects straight to Google), and the API Gateway validates the
 resulting JWT on every route. Access is restricted to an explicit email
 allowlist enforced by a Pre-Sign-Up Lambda — any Google account not on the list
-is rejected at sign-up.
+is rejected at sign-up. The trigger accepts only federated sign-ups carrying a
+verified email claim; native password sign-ups are rejected, and the SPA client
+does not enable SRP/password authentication.
 
 ### One-time setup
 
@@ -265,6 +276,18 @@ aws ssm put-parameter --region eu-north-1 --type SecureString --overwrite \
 Removing an email blocks future sign-ups; to revoke an already-registered user,
 also delete them from the User Pool (console or `aws cognito-idp
 admin-delete-user`).
+After deploying the private-image API change, invalidate `/uploads/*` on the
+CloudFront distribution once to evict objects cached under the former public
+media behavior.
+
+The cost-control budget filters on the user-defined `Project=wine-tracker` tag.
+Activate `Project` under **Billing and Cost Management → Cost allocation tags**
+in the AWS account after applying Terraform; AWS will only include tagged costs
+after activation and billing data refresh. Set `billing_alert_email` through
+the ignored `terraform.tfvars` file or a Terraform variable when applying. The
+budget notification may arrive after usage has already crossed $1, and it
+disables the API until the first of the next month, but it does not stop
+static-site delivery or stored-data charges.
 
 ### Local development
 

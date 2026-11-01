@@ -17,18 +17,20 @@ def _allowed_emails():
 
 
 def handler(event, _context):
+    if event.get("triggerSource") != "PreSignUp_ExternalProvider":
+        raise Exception("Sign-up is available only through an authorized identity provider.")
+
     attributes = event.get("request", {}).get("userAttributes", {}) or {}
     email = (attributes.get("email") or "").strip().lower()
+    email_verified = str(attributes.get("email_verified", "")).lower() == "true"
 
     allowlist = _allowed_emails()
-    if not email or email not in allowlist:
+    if not email or email not in allowlist or not email_verified:
         # Raising here surfaces to the Hosted UI as a sign-in error and blocks
         # user creation. Keep the message generic to avoid leaking the allowlist.
         raise Exception("Your account is not authorized to access this application.")
 
-    # Trust Google's verified email and skip the confirmation step. These flags
-    # are honored for the standard sign-up sources; they are harmless no-ops for
-    # PreSignUp_ExternalProvider.
+    # Cognito receives the verified email claim from the trusted identity provider.
     event["response"]["autoConfirmUser"] = True
     event["response"]["autoVerifyEmail"] = True
 

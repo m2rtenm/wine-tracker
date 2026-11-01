@@ -30,6 +30,7 @@ resource "aws_iam_role_policy" "wines_api_lambda_policy" {
         Effect = "Allow"
         Action = [
           "dynamodb:Scan",
+          "dynamodb:GetItem",
           "dynamodb:PutItem",
           "dynamodb:DeleteItem",
           "dynamodb:UpdateItem"
@@ -40,7 +41,8 @@ resource "aws_iam_role_policy" "wines_api_lambda_policy" {
         Effect = "Allow"
         Action = [
           "s3:PutObject",
-          "s3:DeleteObject"
+          "s3:DeleteObject",
+          "s3:GetObject"
         ]
         Resource = "${aws_s3_bucket.media.arn}/uploads/*"
       },
@@ -65,11 +67,12 @@ resource "aws_iam_role_policy" "wines_api_lambda_policy" {
 }
 
 resource "aws_lambda_function" "wines_api" {
-  function_name = "wine-tracker-wines-api"
-  role          = aws_iam_role.wines_api_lambda_role.arn
-  runtime       = "python3.12"
-  handler       = "lambda_function.handler"
-  timeout       = 30
+  function_name                  = "wine-tracker-wines-api"
+  role                           = aws_iam_role.wines_api_lambda_role.arn
+  runtime                        = "python3.12"
+  handler                        = "lambda_function.handler"
+  timeout                        = 30
+  reserved_concurrent_executions = var.wines_api_reserved_concurrency
 
   filename         = data.archive_file.wines_api_zip.output_path
   source_code_hash = data.archive_file.wines_api_zip.output_base64sha256
@@ -78,7 +81,6 @@ resource "aws_lambda_function" "wines_api" {
     variables = {
       TABLE_NAME       = aws_dynamodb_table.wine_tracker.name
       MEDIA_BUCKET     = aws_s3_bucket.media.id
-      MEDIA_CDN_DOMAIN = aws_cloudfront_distribution.website_cdn.domain_name
       ALLOWED_ORIGINS  = join(",", local.cors_allowed_origins)
       MAX_UPLOAD_BYTES = tostring(var.max_upload_bytes)
     }
@@ -141,6 +143,14 @@ resource "aws_apigatewayv2_route" "wines_api_get" {
   authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
 }
 
+resource "aws_apigatewayv2_route" "wines_api_get_image" {
+  api_id             = aws_apigatewayv2_api.wines_api.id
+  route_key          = "GET /api/wines/{wineId}/image"
+  target             = "integrations/${aws_apigatewayv2_integration.wines_api.id}"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.cognito_jwt.id
+}
+
 resource "aws_apigatewayv2_route" "wines_api_post" {
   api_id             = aws_apigatewayv2_api.wines_api.id
   route_key          = "POST /api/wines"
@@ -177,6 +187,11 @@ resource "aws_apigatewayv2_stage" "wines_api" {
   api_id      = aws_apigatewayv2_api.wines_api.id
   name        = "$default"
   auto_deploy = true
+
+  default_route_settings {
+    throttling_burst_limit = var.api_throttling_burst_limit
+    throttling_rate_limit  = var.api_throttling_rate_limit
+  }
 }
 
 resource "aws_lambda_permission" "allow_apigw_invoke" {

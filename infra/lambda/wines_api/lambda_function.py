@@ -3,13 +3,13 @@ import json
 import os
 from decimal import Decimal
 from datetime import datetime, timezone
+from urllib.parse import quote, unquote, urlparse
 
 import boto3
 from botocore.exceptions import ClientError
 
 TABLE_NAME = os.environ["TABLE_NAME"]
 MEDIA_BUCKET = os.environ["MEDIA_BUCKET"]
-MEDIA_CDN_DOMAIN = os.environ["MEDIA_CDN_DOMAIN"]
 # Comma-separated list of browser origins allowed to read CORS responses.
 ALLOWED_ORIGINS = {
     origin.strip()
@@ -66,6 +66,19 @@ def response(status_code, body, origin=None):
     }
 
 
+def redirect_response(location, origin=None):
+    headers = cors_headers(origin)
+    headers.update({
+        "Cache-Control": "private, no-store",
+        "Location": location,
+    })
+    return {
+        "statusCode": 302,
+        "headers": headers,
+        "body": "",
+    }
+
+
 def parse_body(event):
     raw = event.get("body")
     if not raw:
@@ -89,24 +102,89 @@ def scan_all_items(include_deleted=False):
 
     if include_deleted:
         items.sort(key=lambda x: x.get("wineId", ""), reverse=True)
-        return items
+        return [serialize_item(item) for item in items]
 
     visible_items = [item for item in items if not item.get("isDeleted", False)]
     visible_items.sort(key=lambda x: x.get("wineId", ""), reverse=True)
-    return visible_items
+    return [serialize_item(item) for item in visible_items]
+
+
+def image_key_from_url(image_url, wine_id):
+    parsed = urlparse(image_url or "")
+    key = unquote(parsed.path).lstrip("/")
+    prefix = f"uploads/{wine_id}/"
+    if parsed.scheme != "https" or not parsed.netloc or not key.startswith(prefix):
+        return ""
+    if any(part in {"", ".", ".."} for part in key.split("/")):
+        return ""
+    return key
+
+
+def valid_image_key(image_key, wine_id):
+    key = str(image_key or "")
+    prefix = f"uploads/{wine_id}/"
+    if not key.startswith(prefix) or any(part in {"", ".", ".."} for part in key.split("/")):
+        return ""
+    return key
+
+
+def image_key_for_item(item):
+    wine_id = item.get("wineId", "")
+    return (
+        valid_image_key(item.get("imageKey"), wine_id)
+        or image_key_from_url(item.get("imageUrl", ""), wine_id)
+    )
+
+
+def image_path_for_wine(wine_id):
+    return f"/api/wines/{quote(str(wine_id), safe='')}/image"
+
+
+def serialize_item(item):
+    result = dict(item)
+    image_key = image_key_for_item(result)
+    if image_key:
+        result["imageKey"] = image_key
+        result["imageUrl"] = image_path_for_wine(result["wineId"])
+    return result
+
+
+def get_image(event, origin):
+    wine_id = event.get("pathParameters", {}).get("wineId")
+    if not wine_id:
+        return response(400, {"message": "wineId path parameter is required"}, origin)
+
+    result = TABLE.get_item(Key={"wineId": wine_id})
+    item = result.get("Item")
+    image_key = image_key_for_item(item or {})
+    if not item or not image_key:
+        return response(404, {"message": "Image not found"}, origin)
+
+    signed_url = S3.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": MEDIA_BUCKET, "Key": image_key},
+        ExpiresIn=60,
+    )
+    return redirect_response(signed_url, origin)
 
 
 def put_image_if_present(payload, wine_id):
     upload = payload.get("uploadImage")
     if not upload:
-        return payload.get("imageUrl", "")
+        return (
+            valid_image_key(payload.get("imageKey"), wine_id)
+            or image_key_from_url(payload.get("imageUrl", ""), wine_id)
+        )
 
     file_name = upload.get("fileName", "image.jpg")
     content_type = upload.get("contentType", "application/octet-stream")
     data_base64 = upload.get("dataBase64", "")
 
     if not data_base64:
-        return payload.get("imageUrl", "")
+        return (
+            valid_image_key(payload.get("imageKey"), wine_id)
+            or image_key_from_url(payload.get("imageUrl", ""), wine_id)
+        )
 
     if content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
         raise UploadError(f"Unsupported image type: {content_type}")
@@ -137,7 +215,7 @@ def put_image_if_present(payload, wine_id):
         ContentType=content_type,
     )
 
-    return f"https://{MEDIA_CDN_DOMAIN}/{object_key}"
+    return object_key
 
 
 def resolve_origin(event):
@@ -147,7 +225,9 @@ def resolve_origin(event):
 
 
 def normalize_item(payload, wine_id):
-    image_url = put_image_if_present(payload, wine_id)
+    upload = payload.get("uploadImage") or {}
+    image_key = put_image_if_present(payload, wine_id)
+    image_url = image_path_for_wine(wine_id) if image_key else payload.get("imageUrl", "")
     is_deleted = bool(payload.get("isDeleted", False))
     deleted_at = payload.get("deletedAt", "")
     if is_deleted and not deleted_at:
@@ -163,6 +243,8 @@ def normalize_item(payload, wine_id):
         "drinkType": payload.get("drinkType", "Wine"),
         "vol": Decimal(str(payload.get("vol", 0) or 0)),
         "imageUrl": image_url,
+        "imageKey": image_key,
+        "imageContentType": upload.get("contentType") or payload.get("imageContentType", ""),
         "comment": payload.get("comment", ""),
         "groupAverage": Decimal(str(payload.get("groupAverage", 0) or 0)),
         "isDeleted": is_deleted,
@@ -218,6 +300,9 @@ def handler(event, _context):
         include_deleted_raw = (event.get("queryStringParameters") or {}).get("includeDeleted", "")
         include_deleted = str(include_deleted_raw).lower() in {"1", "true", "yes"}
         return reply(200, scan_all_items(include_deleted=include_deleted))
+
+    if method == "GET" and raw_path.endswith("/image") and raw_path.startswith("/api/wines/"):
+        return get_image(event, origin)
 
     if method == "POST" and raw_path == "/api/wines":
         payload = parse_body(event)
