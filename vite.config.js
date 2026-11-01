@@ -11,6 +11,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      workbox: {
+        globIgnores: ['**/heic2any-*.js'],
+      },
       manifest: {
         id: '/',
         name: 'Wine Tracker',

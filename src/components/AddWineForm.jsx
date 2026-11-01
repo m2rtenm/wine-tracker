@@ -9,6 +9,7 @@ const MAX_IMAGE_DIMENSION = 1920;
 const MIN_IMAGE_DIMENSION = 480;
 const JPEG_QUALITY_STEPS = [0.85, 0.75, 0.65, 0.55, 0.45, 0.35];
 const IMAGE_EXTENSION_PATTERN = /\.(jpe?g|png|gif|webp|bmp|heic|heif|avif)$/i;
+const HEIC_FILE_PATTERN = /\.(heic|heif)$/i;
 // Tasting dates are the Estonian calendar date, independent of the device's
 // timezone, so a member abroad still records the local club date.
 const APP_TIME_ZONE = 'Europe/Tallinn';
@@ -36,14 +37,36 @@ const readFileAsDataUrl = fileOrBlob => new Promise((resolve, reject) => {
   reader.readAsDataURL(fileOrBlob);
 });
 
-// Some Android "content picker" file sources report an empty or generic
-// MIME type (e.g. application/octet-stream) even for real photos, so we
-// can't rely on `file.type` alone to decide whether an image can be
-// compressed. Fall back to sniffing the file extension too.
+// Some Android content pickers report an empty or generic MIME type for
+// photos, so use the file extension as a second image-type signal.
 const looksLikeImageFile = file => {
   if (file?.type?.startsWith('image/')) return true;
-  if (file?.type) return false;
   return IMAGE_EXTENSION_PATTERN.test(file?.name || '');
+};
+
+const isHeicFile = async file => {
+  if (/^image\/hei[cf]$/i.test(file?.type || '') || HEIC_FILE_PATTERN.test(file?.name || '')) {
+    return true;
+  }
+
+  const header = new Uint8Array(await file.slice(0, 32).arrayBuffer());
+  if (String.fromCharCode(...header.subarray(4, 8)) !== 'ftyp') return false;
+
+  const heicBrands = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'hevm', 'hevs']);
+  for (let offset = 8; offset + 4 <= header.length; offset += 4) {
+    if (heicBrands.has(String.fromCharCode(...header.subarray(offset, offset + 4)))) return true;
+  }
+  return false;
+};
+
+const convertHeicToJpeg = async file => {
+  const { default: heic2any } = await import('heic2any');
+  const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+  const blob = Array.isArray(converted) ? converted[0] : converted;
+  if (!blob) {
+    throw new Error('HEIC conversion returned no image.');
+  }
+  return blob;
 };
 
 // Prefer createImageBitmap: it decodes off the main thread, handles EXIF
@@ -106,88 +129,97 @@ const toUploadPayload = async selectedFile => {
   let decoded;
   try {
     decoded = await loadImageSource(selectedFile);
-  } catch {
-    // The file couldn't be decoded as an image at all (unsupported codec,
-    // corrupt data, etc). Uploading the untouched original would still hit
-    // the 413 limit for large photos, so surface a clear, actionable error
-    // instead of silently forwarding a file that is guaranteed to fail.
-    if (selectedFile.size > MAX_IMAGE_UPLOAD_BYTES) {
-      throw new Error('Could not process this image on your device. Please try a different photo or a smaller image.');
+  } catch (decodeError) {
+    if (await isHeicFile(selectedFile)) {
+      try {
+        const jpeg = await convertHeicToJpeg(selectedFile);
+        decoded = await loadImageSource(jpeg);
+      } catch (conversionError) {
+        throw new Error(
+          'Could not process this HEIC photo. Please try a JPEG image or save the photo as JPEG and try again.',
+          { cause: conversionError },
+        );
+      }
+    } else {
+      // Uploading an undecoded original would still hit the 413 limit for
+      // large photos, so don't silently forward a file guaranteed to fail.
+      if (selectedFile.size > MAX_IMAGE_UPLOAD_BYTES) {
+        throw new Error(
+          'Could not process this image on your device. Please try a different photo or a smaller image.',
+          { cause: decodeError },
+        );
+      }
+      const dataBase64 = await readFileAsDataUrl(selectedFile);
+      return {
+        fileName: selectedFile.name,
+        contentType: selectedFile.type || 'application/octet-stream',
+        dataBase64,
+        optimizedBytes: selectedFile.size,
+      };
     }
-    const dataBase64 = await readFileAsDataUrl(selectedFile);
-    return {
-      fileName: selectedFile.name,
-      contentType: selectedFile.type || 'application/octet-stream',
-      dataBase64,
-      optimizedBytes: selectedFile.size,
-    };
   }
 
-  {
-    const { source, width: sourceWidth, height: sourceHeight, close } = decoded;
-    try {
-      const baseScale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(sourceWidth, sourceHeight));
-      let scaleMultiplier = 1;
-      let bestBlob = null;
+  const { source, width: sourceWidth, height: sourceHeight, close } = decoded;
+  try {
+    const baseScale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(sourceWidth, sourceHeight));
+    let scaleMultiplier = 1;
+    let bestBlob = null;
 
-      // Keep shrinking (dimensions, then quality) until the result fits
-      // under the upload limit or we hit a sane minimum dimension floor.
-      // This guarantees convergence instead of giving up after a fixed
-      // number of attempts and uploading an oversized image anyway.
-      while (true) {
-        const width = Math.max(1, Math.round(sourceWidth * baseScale * scaleMultiplier));
-        const height = Math.max(1, Math.round(sourceHeight * baseScale * scaleMultiplier));
+    // Keep shrinking (dimensions, then quality) until the result fits
+    // under the upload limit or we hit a sane minimum dimension floor.
+    while (true) {
+      const width = Math.max(1, Math.round(sourceWidth * baseScale * scaleMultiplier));
+      const height = Math.max(1, Math.round(sourceHeight * baseScale * scaleMultiplier));
 
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
 
-        const context = canvas.getContext('2d');
-        if (!context) break;
+      const context = canvas.getContext('2d');
+      if (!context) break;
 
-        context.drawImage(source, 0, 0, width, height);
+      context.drawImage(source, 0, 0, width, height);
 
-        for (const quality of JPEG_QUALITY_STEPS) {
-          const blob = await canvasToBlob(canvas, quality);
-          if (!blob) continue;
+      for (const quality of JPEG_QUALITY_STEPS) {
+        const blob = await canvasToBlob(canvas, quality);
+        if (!blob) continue;
 
-          if (!bestBlob || blob.size < bestBlob.size) {
-            bestBlob = blob;
-          }
-
-          if (blob.size <= MAX_IMAGE_UPLOAD_BYTES) {
-            const dataBase64 = await readFileAsDataUrl(blob);
-            return {
-              fileName: ensureJpegFileName(selectedFile.name),
-              contentType: 'image/jpeg',
-              dataBase64,
-              optimizedBytes: blob.size,
-            };
-          }
+        if (!bestBlob || blob.size < bestBlob.size) {
+          bestBlob = blob;
         }
 
-        if (Math.min(width, height) <= MIN_IMAGE_DIMENSION) break;
-        scaleMultiplier *= 0.85;
+        if (blob.size <= MAX_IMAGE_UPLOAD_BYTES) {
+          const dataBase64 = await readFileAsDataUrl(blob);
+          return {
+            fileName: ensureJpegFileName(selectedFile.name),
+            contentType: 'image/jpeg',
+            dataBase64,
+            optimizedBytes: blob.size,
+          };
+        }
       }
 
-      if (!bestBlob) {
-        throw new Error('Could not compress this image on your device. Please try a different photo.');
-      }
-
-      if (bestBlob.size > MAX_IMAGE_UPLOAD_BYTES) {
-        throw new Error('Image is too large even after compression. Please use a smaller image and try again.');
-      }
-
-      const dataBase64 = await readFileAsDataUrl(bestBlob);
-      return {
-        fileName: ensureJpegFileName(selectedFile.name),
-        contentType: 'image/jpeg',
-        dataBase64,
-        optimizedBytes: bestBlob.size,
-      };
-    } finally {
-      close();
+      if (Math.min(width, height) <= MIN_IMAGE_DIMENSION) break;
+      scaleMultiplier *= 0.85;
     }
+
+    if (!bestBlob) {
+      throw new Error('Could not compress this image on your device. Please try a different photo.');
+    }
+
+    if (bestBlob.size > MAX_IMAGE_UPLOAD_BYTES) {
+      throw new Error('Image is too large even after compression. Please use a smaller image and try again.');
+    }
+
+    const dataBase64 = await readFileAsDataUrl(bestBlob);
+    return {
+      fileName: ensureJpegFileName(selectedFile.name),
+      contentType: 'image/jpeg',
+      dataBase64,
+      optimizedBytes: bestBlob.size,
+    };
+  } finally {
+    close();
   }
 };
 
@@ -337,6 +369,11 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
     event.target.value = '';
   };
 
+  const handleRemoveFile = () => {
+    setFile(null);
+    setStatus('');
+  };
+
   const generateWineId = date => {
     const normalizedDate = date.replace(/-/g, '');
     const existingForDate = existingWines.filter(wine => wine.tastedDate === date);
@@ -480,7 +517,20 @@ export default function AddWineForm({ isOpen, onClose, onSave, initialWine, exis
               onChange={handleFileChange}
               className="hidden"
             />
-            {file && <p className="mt-2 text-xs text-slate-500">Selected file: {file.name}</p>}
+            {file && (
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-slate-500">Selected file: {file.name}</p>
+                <button
+                  type="button"
+                  onClick={handleRemoveFile}
+                  disabled={isSubmitting}
+                  className="rounded-lg px-2 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label={`Remove selected image ${file.name}`}
+                >
+                  Remove image
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
