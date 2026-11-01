@@ -70,8 +70,11 @@ resource "aws_iam_role_policy" "budget_shutdown" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = ["lambda:PutFunctionConcurrency"]
+        Effect = "Allow"
+        Action = [
+          "lambda:PutFunctionConcurrency",
+          "lambda:DeleteFunctionConcurrency",
+        ]
         Resource = aws_lambda_function.wines_api.arn
       },
       {
@@ -104,7 +107,6 @@ resource "aws_lambda_function" "budget_shutdown" {
       BUDGET_NAME         = local.wine_tracker_budget_name
       ACCOUNT_ID          = data.aws_caller_identity.current.account_id
       MONTHLY_LIMIT_USD   = tostring(var.monthly_cost_limit_usd)
-      RESTORE_CONCURRENCY = tostring(var.wines_api_reserved_concurrency)
     }
   }
 }

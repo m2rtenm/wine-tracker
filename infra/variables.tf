@@ -59,12 +59,6 @@ variable "api_throttling_burst_limit" {
   default     = 20
 }
 
-variable "wines_api_reserved_concurrency" {
-  description = "Maximum concurrent executions of the Wine Tracker API Lambda, limiting concurrency-driven cost."
-  type        = number
-  default     = 10
-}
-
 variable "monthly_cost_limit_usd" {
   description = "Monthly Wine Tracker cost threshold that disables API Lambda execution until the next month."
   type        = number

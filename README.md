@@ -193,11 +193,10 @@ Variable defaults live in `infra/variables.tf` (no tfvars file is required):
   credentials and the collection is not exposed as a public file.
 - API responses are CORS-restricted to the app's own origins (the CloudFront
   aliases plus configured dev origins), not `*`.
-- API Gateway throttles requests (default 10 requests/second, burst 20) and
-  the API Lambda is capped at 10 concurrent executions. These reduce abuse-driven
-  spend. An app-tagged $1 monthly AWS Budget emails the configured contact and
-  disables API Lambda execution after the threshold is reported; a monthly
-  schedule restores it at the next month boundary.
+- API Gateway throttles requests (default 10 requests/second, burst 20) to
+  reduce abuse-driven spend. An app-tagged $1 monthly AWS Budget emails the
+  configured contact and disables API Lambda execution after the threshold is
+  reported; a monthly schedule restores it at the next month boundary.
 - AWS cost reporting is delayed and budget shutdown does not stop CloudFront
   delivery or S3 storage charges. It is not a guarantee of a $0 bill.
 - CloudFront serves the app with HSTS, a Content-Security-Policy, and related

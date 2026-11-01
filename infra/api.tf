@@ -67,12 +67,11 @@ resource "aws_iam_role_policy" "wines_api_lambda_policy" {
 }
 
 resource "aws_lambda_function" "wines_api" {
-  function_name                  = "wine-tracker-wines-api"
-  role                           = aws_iam_role.wines_api_lambda_role.arn
-  runtime                        = "python3.12"
-  handler                        = "lambda_function.handler"
-  timeout                        = 30
-  reserved_concurrent_executions = var.wines_api_reserved_concurrency
+  function_name = "wine-tracker-wines-api"
+  role          = aws_iam_role.wines_api_lambda_role.arn
+  runtime       = "python3.12"
+  handler       = "lambda_function.handler"
+  timeout       = 30
 
   filename         = data.archive_file.wines_api_zip.output_path
   source_code_hash = data.archive_file.wines_api_zip.output_base64sha256

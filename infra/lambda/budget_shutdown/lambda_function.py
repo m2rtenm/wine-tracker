@@ -8,18 +8,14 @@ ACCOUNT_ID = os.environ["ACCOUNT_ID"]
 MONTHLY_LIMIT_USD = float(os.environ["MONTHLY_LIMIT_USD"])
 TARGET_FUNCTION_ARN = os.environ["TARGET_FUNCTION_ARN"]
 TARGET_REGION = os.environ["TARGET_REGION"]
-RESTORE_CONCURRENCY = int(os.environ["RESTORE_CONCURRENCY"])
 
 LAMBDA = boto3.client("lambda", region_name=TARGET_REGION)
 
 
 def handler(event, _context):
     if event.get("source") == "aws.events":
-        LAMBDA.put_function_concurrency(
-            FunctionName=TARGET_FUNCTION_ARN,
-            ReservedConcurrentExecutions=RESTORE_CONCURRENCY,
-        )
-        return {"action": "restored", "concurrency": RESTORE_CONCURRENCY}
+        LAMBDA.delete_function_concurrency(FunctionName=TARGET_FUNCTION_ARN)
+        return {"action": "restored"}
 
     for record in event.get("Records", []):
         message = json.loads(record["Sns"]["Message"])
