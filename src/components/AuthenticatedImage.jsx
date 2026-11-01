@@ -1,6 +1,31 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from 'react-oidc-context';
 
+let nextImageRequestAt = 0;
+
+function waitForImageRequestSlot(signal) {
+  const now = Date.now();
+  const scheduledAt = Math.max(now, nextImageRequestAt);
+  nextImageRequestAt = scheduledAt + 125;
+  const delay = scheduledAt - now;
+
+  if (delay === 0) return Promise.resolve();
+  if (signal.aborted) return Promise.reject(new DOMException('Request aborted', 'AbortError'));
+
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      signal.removeEventListener('abort', abort);
+      resolve();
+    }, delay);
+    const abort = () => {
+      clearTimeout(timeout);
+      reject(new DOMException('Request aborted', 'AbortError'));
+    };
+
+    signal.addEventListener('abort', abort, { once: true });
+  });
+}
+
 export default function AuthenticatedImage({ src, alt, className }) {
   const auth = useAuth();
   const [loadedImage, setLoadedImage] = useState(null);
@@ -17,6 +42,7 @@ export default function AuthenticatedImage({ src, alt, className }) {
 
     const loadImage = async () => {
       try {
+        await waitForImageRequestSlot(controller.signal);
         const response = await fetch(src, {
           cache: 'no-store',
           headers: token ? { Authorization: `Bearer ${token}` } : {},

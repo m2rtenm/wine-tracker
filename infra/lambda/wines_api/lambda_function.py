@@ -99,20 +99,26 @@ def scan_all_items(include_deleted=False):
 def image_key_from_url(image_url, wine_id):
     parsed = urlparse(image_url or "")
     key = unquote(parsed.path).lstrip("/")
-    prefix = f"uploads/{wine_id}/"
-    if parsed.scheme != "https" or not parsed.netloc or not key.startswith(prefix):
+    if parsed.scheme != "https" or not parsed.netloc:
         return ""
-    if any(part in {"", ".", ".."} for part in key.split("/")):
-        return ""
-    return key
+    return valid_image_key(key, wine_id)
 
 
 def valid_image_key(image_key, wine_id):
     key = str(image_key or "")
     prefix = f"uploads/{wine_id}/"
-    if not key.startswith(prefix) or any(part in {"", ".", ".."} for part in key.split("/")):
-        return ""
-    return key
+    if key.startswith(prefix):
+        if any(part in {"", ".", ".."} for part in key.split("/")):
+            return ""
+        return key
+
+    # Imported images predate per-wine upload directories and use
+    # uploads/legacy/<wineId>.<extension>.
+    legacy_prefix = f"uploads/legacy/{wine_id}"
+    legacy_extension = key[len(legacy_prefix):] if key.startswith(legacy_prefix) else ""
+    if legacy_extension in {".jpg", ".jpeg", ".png", ".webp"}:
+        return key
+    return ""
 
 
 def image_key_for_item(item):
