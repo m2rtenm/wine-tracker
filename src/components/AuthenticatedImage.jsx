@@ -7,14 +7,13 @@ export default function AuthenticatedImage({ src, alt, className }) {
   const token = auth.user?.access_token;
   const isProtectedImage = src?.startsWith('/api/wines/');
   const resolvedSrc = isProtectedImage
-    ? loadedImage?.src === src && loadedImage?.token === token ? loadedImage.objectUrl : ''
+    ? loadedImage?.src === src && loadedImage?.token === token ? loadedImage.signedUrl : ''
     : src;
 
   useEffect(() => {
     if (!src?.startsWith('/api/wines/')) return undefined;
 
     const controller = new AbortController();
-    let objectUrl = '';
 
     const loadImage = async () => {
       try {
@@ -27,13 +26,13 @@ export default function AuthenticatedImage({ src, alt, className }) {
           throw new Error(`Image request failed (${response.status})`);
         }
 
-        const imageBlob = await response.blob();
-        const nextObjectUrl = URL.createObjectURL(imageBlob);
-        if (controller.signal.aborted) {
-          URL.revokeObjectURL(nextObjectUrl);
-        } else {
-          objectUrl = nextObjectUrl;
-          setLoadedImage({ src, token, objectUrl });
+        const { imageUrl } = await response.json();
+        if (typeof imageUrl !== 'string' || !imageUrl.startsWith('https://')) {
+          throw new Error('Image response did not contain a valid URL');
+        }
+
+        if (!controller.signal.aborted) {
+          setLoadedImage({ src, token, signedUrl: imageUrl });
         }
       } catch (error) {
         if (!controller.signal.aborted) {
@@ -43,10 +42,8 @@ export default function AuthenticatedImage({ src, alt, className }) {
     };
 
     loadImage();
-
     return () => {
       controller.abort();
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [src, token]);
 

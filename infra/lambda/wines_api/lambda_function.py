@@ -66,19 +66,6 @@ def response(status_code, body, origin=None):
     }
 
 
-def redirect_response(location, origin=None):
-    headers = cors_headers(origin)
-    headers.update({
-        "Cache-Control": "private, no-store",
-        "Location": location,
-    })
-    return {
-        "statusCode": 302,
-        "headers": headers,
-        "body": "",
-    }
-
-
 def parse_body(event):
     raw = event.get("body")
     if not raw:
@@ -165,7 +152,9 @@ def get_image(event, origin):
         Params={"Bucket": MEDIA_BUCKET, "Key": image_key},
         ExpiresIn=60,
     )
-    return redirect_response(signed_url, origin)
+    result = response(200, {"imageUrl": signed_url}, origin)
+    result["headers"]["Cache-Control"] = "private, no-store"
+    return result
 
 
 def put_image_if_present(payload, wine_id):
